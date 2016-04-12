@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<package >
+  <metadata>
+    <id>Quartz.Impl.RavenDB</id>
+    <version>1.0</version>
+    <title>Quartz.NET on ravenDB</title>
+    <authors>Iftah Ben Zaken</authors>
+    <owners>Iftah Ben Zaken</owners>
+    <licenseUrl>http://www.apache.org/licenses/LICENSE-2.0.html</licenseUrl>
+    <projectUrl>http://PROJECT_URL_HERE_OR_DELETE_THIS_LINE</projectUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <description>RavenDB JobStore support for Quartz.NET scheduler.</description>
+    <copyright>Copyright 2016</copyright>
+    <tags>RavenDB NoSQL JobStore Quartz scheduler</tags>
+  </metadata>
+</package>
