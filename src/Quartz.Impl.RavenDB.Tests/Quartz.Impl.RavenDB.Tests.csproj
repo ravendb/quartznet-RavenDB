@@ -42,11 +42,9 @@
       <HintPath>..\packages\NUnitTestAdapter.WithFramework.2.0.0\lib\nunit.framework.dll</HintPath>
       <Private>True</Private>
     </Reference>
-    <Reference Include="Quartz">
-      <HintPath>..\Quartz.Impl.RavenDB\bin\Debug\Quartz.dll</HintPath>
-    </Reference>
-    <Reference Include="Quartz.Impl.RavenDB">
-      <HintPath>..\Quartz.Impl.RavenDB\bin\Debug\Quartz.Impl.RavenDB.dll</HintPath>
+    <Reference Include="Quartz, Version=2.3.3.0, Culture=neutral, PublicKeyToken=f6b8c98a402cc8a4, processorArchitecture=MSIL">
+      <HintPath>..\packages\Quartz.2.3.3\lib\net40\Quartz.dll</HintPath>
+      <Private>True</Private>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
@@ -75,6 +73,12 @@
   </ItemGroup>
   <ItemGroup>
     <Service Include="{82A7F48D-3B50-4B1E-B82E-3ADA8210C358}" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Quartz.Impl.RavenDB\Quartz.Impl.RavenDB.csproj">
+      <Project>{f17f87f5-9855-46ed-aaad-dbf163f78b02}</Project>
+      <Name>Quartz.Impl.RavenDB</Name>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
