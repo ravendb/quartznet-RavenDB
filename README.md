@@ -12,9 +12,9 @@ Then add [Quartz.NET on ravenDB using NuGET](https://www.nuget.org/packages/Quar
 
 ###### Manual configuration
 In your code, where you would have [normally configured](http://www.quartz-scheduler.net/documentation/quartz-2.x/tutorial/job-stores.html) Quartz to use a persistent job store, 
-you need to add the following configuration property: 
+you **must** add the following configuration property: 
 ```
-["quartz.jobStore.type"] = "Quartz.Impl.RavenDB.RavenJobStore, Quartz.Impl.RavenDB"
+quartz.jobStore.type = Quartz.Impl.RavenDB.RavenJobStore, Quartz.Impl.RavenDB
 ```
 Also, the following configuration **must** be added to app.config or web.config (change the connection string according to your server url and database name).
 ```
@@ -41,6 +41,5 @@ NameValueCollection properties = new NameValueCollection
 
 // Init scheduler with the desired configuration properties
 ISchedulerFactory sf = new StdSchedulerFactory(properties);
-<<<<<<< HEAD
 IScheduler scheduler = sf.GetScheduler();
 ```
