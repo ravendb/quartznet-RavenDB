@@ -8,7 +8,7 @@ JobStore implementation for Quartz.NET scheduler using RavenDB.
 
 ###### Installation
 First add scheduling to your app using Quart.NET ([example](http://www.quartz-scheduler.net/documentation/quartz-2.x/quick-start.html)).
-Then add [Quartz.NET on ravenDB using NuGET](https://www.nuget.org/packages/Quartz.Impl.RavenDB/).
+Then add [Quartz.NET on ravenDB](https://www.nuget.org/packages/Quartz.Impl.RavenDB/) by using NuGET.
 
 ###### Manual configuration
 In your code, where you would have [normally configured](http://www.quartz-scheduler.net/documentation/quartz-2.x/tutorial/job-stores.html) Quartz to use a persistent job store, 
@@ -23,7 +23,7 @@ Also, the following configuration **must** be added to app.config or web.config 
   </connectionStrings>
 ```
 
-## For example:
+###### Example:
 ```
 // In your application where you want to setup the scheduler:
 NameValueCollection properties = new NameValueCollection
