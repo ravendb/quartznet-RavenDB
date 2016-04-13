@@ -32,11 +32,11 @@ using Quartz.Spi;
 namespace Quartz.Impl.RavenDB.Tests
 {
     /// <summary>
-    ///  Unit test for RAMJobStore.  These tests were submitted by Johannes Zillmann
-    /// as part of issue QUARTZ-306.
+    /// Unit tests for RavenJobStore, based on the RAMJobStore tests with minor changes
+    /// (originally submitted by Johannes Zillmann)
     /// </summary>
     [TestFixture]
-    public class RavenJobStoreTest
+    public class RavenJobStoreUnitTests
     {
         private IJobStore fJobStore;
         private JobDetailImpl fJobDetail;
