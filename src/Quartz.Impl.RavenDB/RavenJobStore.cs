@@ -9,7 +9,6 @@ using System.Runtime.CompilerServices;
 
 using Common.Logging;
 
-using Quartz.Collection;
 using Quartz.Core;
 using Quartz.Impl.Matchers;
 using Quartz.Spi;
@@ -24,6 +23,7 @@ namespace Quartz.Impl.RavenDB
 {
     /// <summary> 
     /// An implementation of <see cref="IJobStore" /> to use ravenDB as a persistent Job Store.
+    /// Mostly based on RAMJobStore logic with changes to support persistent storage.
     /// Provides an <see cref="IJob" />
     /// and <see cref="ITrigger" /> storage mechanism for the
     /// <see cref="QuartzScheduler" />'s use.
@@ -39,8 +39,7 @@ namespace Quartz.Impl.RavenDB
     /// <seealso cref="IJobDetail" />
     /// <seealso cref="JobDataMap" />
     /// <seealso cref="ICalendar" />
-    /// <author>James House</author>
-    /// <author>Marko Lahma (.NET)</author>
+    /// <author>Iftah Ben Zaken</author>
     public class RavenJobStore : IJobStore
     {
         private TimeSpan misfireThreshold = TimeSpan.FromSeconds(5);
@@ -86,7 +85,7 @@ namespace Quartz.Impl.RavenDB
 
         /// <summary>
         /// Called by the QuartzScheduler before the <see cref="IJobStore" /> is
-        /// used, in order to give the it a chance to Initialize.
+        /// used, in order to give it a chance to Initialize.
         /// </summary>
         [MethodImpl(MethodImplOptions.Synchronized)]
         public void Initialize(ITypeLoadHelper loadHelper, ISchedulerSignaler s)
@@ -134,21 +133,20 @@ namespace Quartz.Impl.RavenDB
             // If schefuler doesn't exist create new empty scheduler and store it
             var schedToStore = new Scheduler
             {
-                InstanceName = this.InstanceName,
+                InstanceName = InstanceName,
                 LastCheckinTime = DateTimeOffset.MinValue,
                 CheckinInterval = DateTimeOffset.MinValue,
                 Calendars = new Dictionary<string, ICalendar>(),
                 PausedJobGroups = new Collection.HashSet<string>(),
-                BlockedJobs = new Collection.HashSet<string>()
+                BlockedJobs = new Collection.HashSet<string>(),
+                State = "Started"
             };
 
             using (var session = DocumentStoreHolder.Store.OpenSession())
             {
                 session.Store(schedToStore, InstanceName);
                 session.SaveChanges();
-            }
-            
-            SetSchedulerState("Started");
+            }            
         }
 
         /// <summary>
@@ -208,6 +206,7 @@ namespace Quartz.Impl.RavenDB
                 }
 
                 Log.Info("Freed triggers from 'acquired' / 'blocked' state.");
+                
                 // recover jobs marked for recovery that were not fully executed
                 IList<IOperableTrigger> recoveringJobTriggers = new List<IOperableTrigger>();
 
@@ -251,10 +250,6 @@ namespace Quartz.Impl.RavenDB
                 }
 
             }
-            catch (JobPersistenceException)
-            {
-                throw;
-            }
             catch (Exception e)
             {
                 throw new JobPersistenceException("Couldn't recover jobs: " + e.Message, e);
@@ -277,7 +272,6 @@ namespace Quartz.Impl.RavenDB
         /// </summary>
         /// <param name="newJob">The <see cref="IJobDetail" /> to be stored.</param>
         /// <param name="newTrigger">The <see cref="ITrigger" /> to be stored.</param>
-        /// <throws>  ObjectAlreadyExistsException </throws>
         [MethodImpl(MethodImplOptions.Synchronized)]
         public void StoreJobAndTrigger(IJobDetail newJob, IOperableTrigger newTrigger)
         {
@@ -388,11 +382,6 @@ namespace Quartz.Impl.RavenDB
         /// key, and any <see cref="ITrigger" /> s that reference
         /// it.
         /// </summary>
-        /// <remarks>
-        /// If removal of the <see cref="IJob" /> results in an empty group, the
-        /// group should be removed from the <see cref="IJobStore" />'s list of
-        /// known group names.
-        /// </remarks>
         /// <returns>
         /// 	<see langword="true" /> if a <see cref="IJob" /> with the given name and
         /// group was found and removed from the store.
@@ -442,7 +431,7 @@ namespace Quartz.Impl.RavenDB
             {
                 var job = session.Load<Job>(jobKey.Name + "/" + jobKey.Group);
 
-                return (job == null) ? null : job.Deserialize();
+                return job?.Deserialize();
             }
         }
 
@@ -499,18 +488,13 @@ namespace Quartz.Impl.RavenDB
         /// </summary>
         /// <remarks>
         /// <para>
-        /// If removal of the <see cref="ITrigger" /> results in an empty group, the
-        /// group should be removed from the <see cref="IJobStore" />'s list of
-        /// known group names.
-        /// </para>
-        /// <para>
         /// If removal of the <see cref="ITrigger" /> results in an 'orphaned' <see cref="IJob" />
         /// that is not 'durable', then the <see cref="IJob" /> should be deleted
         /// also.
         /// </para>
         /// </remarks>
         /// <returns>
-        /// 	<see langword="true" /> if a <see cref="ITrigger" /> with the given
+        /// <see langword="true" /> if a <see cref="ITrigger" /> with the given
         /// name and group was found and removed from the store.
         /// </returns>
         [MethodImpl(MethodImplOptions.Synchronized)]
@@ -586,7 +570,6 @@ namespace Quartz.Impl.RavenDB
         [MethodImpl(MethodImplOptions.Synchronized)]
         public IOperableTrigger RetrieveTrigger(TriggerKey triggerKey)
         {
-            // this check might not be necessary 
             if (!CheckExists(triggerKey))
             {
                 return null;
@@ -622,7 +605,7 @@ namespace Quartz.Impl.RavenDB
                 }
                 catch (ArgumentNullException argumentNullException)
                 {
-                    Log.Error("Calendar is null.", argumentNullException);
+                    Log.Error("Calendars collection is null.", argumentNullException);
                     answer = false;
                 }
             }
@@ -680,6 +663,9 @@ namespace Quartz.Impl.RavenDB
         /// <remarks>
         /// </remarks>
         /// <param name="name">the identifier for the calendar</param>
+        /// <param name="calendar">the name of the calendar</param>
+        /// <param name="replaceExisting">should replace existing calendar</param>
+        /// <param name="updateTriggers">should update triggers</param>
         [MethodImpl(MethodImplOptions.Synchronized)]
         public void StoreCalendar(string name, ICalendar calendar, bool replaceExisting, bool updateTriggers)
         {
@@ -694,7 +680,7 @@ namespace Quartz.Impl.RavenDB
                     throw new NullReferenceException(string.Format(CultureInfo.InvariantCulture, "Scheduler with instance name '{0}' is null", InstanceName));
                 }
 
-                if (CalendarExists(name) && (!replaceExisting))
+                if (CalendarExists(name) && !replaceExisting)
                 {
                     throw new ObjectAlreadyExistsException(string.Format(CultureInfo.InvariantCulture, "Calendar with name '{0}' already exists.", name));
                 }
@@ -742,7 +728,7 @@ namespace Quartz.Impl.RavenDB
         /// </remarks>
         /// <param name="calName">The name of the <see cref="ICalendar" /> to be removed.</param>
         /// <returns>
-        /// 	<see langword="true" /> if a <see cref="ICalendar" /> with the given name
+        /// <see langword="true" /> if a <see cref="ICalendar" /> with the given name
         /// was found and removed from the store.
         /// </returns>
         [MethodImpl(MethodImplOptions.Synchronized)]
@@ -779,6 +765,11 @@ namespace Quartz.Impl.RavenDB
             return callCollection.ContainsKey(calName) ? callCollection[calName] : null;
         }
 
+        /// <summary>
+        /// Get the <see cref="ICalendar" />s that are
+        /// stored in the <see cref="IJobStore" />.
+        /// </summary>
+        /// <returns></returns>
         [MethodImpl(MethodImplOptions.Synchronized)]
         public Dictionary<string, ICalendar> RetrieveCalendarCollection()
         {
@@ -797,6 +788,11 @@ namespace Quartz.Impl.RavenDB
             }
         }
 
+        /// <summary>
+        /// Get the number of <see cref="IJob" />s that are
+        /// stored in the <see cref="IJobStore" />.
+        /// </summary>
+        /// <returns></returns>
         [MethodImpl(MethodImplOptions.Synchronized)]
         public int GetNumberOfJobs()
         {
@@ -806,6 +802,11 @@ namespace Quartz.Impl.RavenDB
             }
         }
 
+        /// <summary>
+        /// Get the number of <see cref="ITrigger" />s that are
+        /// stored in the <see cref="IJobStore" />.
+        /// </summary>
+        /// <returns></returns>
         [MethodImpl(MethodImplOptions.Synchronized)]
         public int GetNumberOfTriggers()
         {
@@ -815,12 +816,27 @@ namespace Quartz.Impl.RavenDB
             }
         }
 
+        /// <summary>
+        /// Get the number of <see cref="ICalendar" /> s that are
+        /// stored in the <see cref="IJobStore" />.
+        /// </summary>
+        /// <returns></returns>
         [MethodImpl(MethodImplOptions.Synchronized)]
         public int GetNumberOfCalendars()
         {
             return RetrieveCalendarCollection().Count;
         }
 
+        /// <summary>
+        /// Get the names of all of the <see cref="IJob" /> s that
+        /// have the given group name.
+        /// <para>
+        /// If there are no jobs in the given group name, the result should be a
+        /// zero-length array (not <see langword="null" />).
+        /// </para>
+        /// </summary>
+        /// <param name="matcher"></param>
+        /// <returns></returns>
         [MethodImpl(MethodImplOptions.Synchronized)]
         public Collection.ISet<JobKey> GetJobKeys(GroupMatcher<JobKey> matcher)
         {
@@ -875,6 +891,14 @@ namespace Quartz.Impl.RavenDB
             return result;
         }
 
+        /// <summary>
+        /// Get the names of all of the <see cref="IJob" />
+        /// groups.
+        /// <para>
+        /// If there are no known group names, the result should be a zero-length
+        /// array (not <see langword="null" />).
+        /// </para>
+        /// </summary>
         [MethodImpl(MethodImplOptions.Synchronized)]
         public IList<string> GetJobGroupNames()
         {
@@ -887,37 +911,79 @@ namespace Quartz.Impl.RavenDB
             }
         }
 
+        /// <summary>
+        /// Get the names of all of the <see cref="ITrigger" />
+        /// groups.
+        /// <para>
+        /// If there are no known group names, the result should be a zero-length
+        /// array (not <see langword="null" />).
+        /// </para>
+        /// </summary>
         [MethodImpl(MethodImplOptions.Synchronized)]
         public IList<string> GetTriggerGroupNames()
         {
             using (var session = DocumentStoreHolder.Store.OpenSession())
             {
-                return session.Query<Trigger>()
-                    .Select(t => t.Group)
-                    .Distinct()
-                    .ToList();
+                try
+                {
+                    var result = session.Query<Trigger>()
+                        .Select(t => t.Group)
+                        .Distinct()
+                        .ToList();
+                    return result;
+                }
+                catch (ArgumentNullException)
+                {
+                    return new List<string>();
+                }
             }
         }
 
+        /// <summary>
+        /// Get the names of all of the <see cref="ICalendar" /> s
+        /// in the <see cref="IJobStore" />.
+        /// <para>
+        /// If there are no Calendars in the given group name, the result should be
+        /// a zero-length array (not <see langword="null" />).
+        /// </para>
+        /// </summary>
         [MethodImpl(MethodImplOptions.Synchronized)]
         public IList<string> GetCalendarNames()
         {
             return RetrieveCalendarCollection().Keys.ToList();
         }
 
+        /// <summary>
+        /// Get all of the Triggers that are associated to the given Job.
+        /// </summary>
+        /// <remarks>
+        /// If there are no matches, a zero-length array should be returned.
+        /// </remarks>
         [MethodImpl(MethodImplOptions.Synchronized)]
         public IList<IOperableTrigger> GetTriggersForJob(JobKey jobKey)
         {
             using (var session = DocumentStoreHolder.Store.OpenSession())
             {
-                return session
-                    .Query<Trigger>()
-                    .Where(t => Equals(t.JobName, jobKey.Name) && Equals(t.Group, jobKey.Group))
-                    .ToList()
-                    .Select(trigger => trigger.Deserialize()).ToList();
+                try
+                {
+                    var result = session
+                        .Query<Trigger>()
+                        .Where(t => Equals(t.JobName, jobKey.Name) && Equals(t.Group, jobKey.Group))
+                        .ToList()
+                        .Select(trigger => trigger.Deserialize()).ToList();
+                    return result;
+                }
+                catch(NullReferenceException)
+                {
+                    return new List<IOperableTrigger>();
+                }
             }
         }
 
+        /// <summary>
+        /// Get the current state of the identified <see cref="ITrigger" />.
+        /// </summary>
+        /// <seealso cref="TriggerState" />
         [MethodImpl(MethodImplOptions.Synchronized)]
         public TriggerState GetTriggerState(TriggerKey triggerKey)
         {
@@ -949,6 +1015,9 @@ namespace Quartz.Impl.RavenDB
             }
         }
 
+        /// <summary>
+        /// Pause the <see cref="ITrigger" /> with the given key.
+        /// </summary>
         [MethodImpl(MethodImplOptions.Synchronized)]
         public void PauseTrigger(TriggerKey triggerKey)
         {
@@ -971,7 +1040,7 @@ namespace Quartz.Impl.RavenDB
                     return;
                 }
 
-                trig.State = (trig.State == InternalTriggerState.Blocked ? InternalTriggerState.PausedAndBlocked : InternalTriggerState.Paused);
+                trig.State = trig.State == InternalTriggerState.Blocked ? InternalTriggerState.PausedAndBlocked : InternalTriggerState.Paused;
                 session.SaveChanges();
             }
         }
@@ -988,7 +1057,7 @@ namespace Quartz.Impl.RavenDB
         [MethodImpl(MethodImplOptions.Synchronized)]
         public Collection.ISet<string> PauseTriggers(GroupMatcher<TriggerKey> matcher)
         {
-            var pausedGroups = new System.Collections.Generic.HashSet<string>();
+            var pausedGroups = new HashSet<string>();
 
             var triggerKeysForMatchedGroup = GetTriggerKeys(matcher);
             foreach (var triggerKey in triggerKeysForMatchedGroup)
@@ -999,6 +1068,10 @@ namespace Quartz.Impl.RavenDB
             return new Collection.HashSet<string>(pausedGroups);
         }
 
+        /// <summary>
+        /// Pause the <see cref="IJob" /> with the given key - by
+        /// pausing all of its current <see cref="ITrigger" />s.
+        /// </summary>
         [MethodImpl(MethodImplOptions.Synchronized)]
         public void PauseJob(JobKey jobKey)
         {
@@ -1009,6 +1082,17 @@ namespace Quartz.Impl.RavenDB
             }
         }
 
+        /// <summary>
+        /// Pause all of the <see cref="IJob" />s in the given
+        /// group - by pausing all of their <see cref="ITrigger" />s.
+        /// <para>
+        /// The JobStore should "remember" that the group is paused, and impose the
+        /// pause on any new jobs that are added to the group while the group is
+        /// paused.
+        /// </para>
+        /// </summary>
+        /// <seealso cref="string">
+        /// </seealso>
         [MethodImpl(MethodImplOptions.Synchronized)]
         public IList<string> PauseJobs(GroupMatcher<JobKey> matcher)
         {
@@ -1061,14 +1145,7 @@ namespace Quartz.Impl.RavenDB
                     return;
                 }
 
-                if (GetBlockedJobs().Contains(trigger.JobKey))
-                {
-                    trigger.State = InternalTriggerState.Blocked;
-                }
-                else
-                {
-                    trigger.State = InternalTriggerState.Waiting;
-                }
+                trigger.State = GetBlockedJobs().Contains(trigger.JobKey) ? InternalTriggerState.Blocked : InternalTriggerState.Waiting;
 
                 ApplyMisfire(trigger);
 
@@ -1076,6 +1153,14 @@ namespace Quartz.Impl.RavenDB
             }
         }
 
+        /// <summary>
+        /// Resume (un-pause) all of the <see cref="ITrigger" />s
+        /// in the given group.
+        /// <para>
+        /// If any <see cref="ITrigger" /> missed one or more fire-times, then the
+        /// <see cref="ITrigger" />'s misfire instruction will be applied.
+        /// </para>
+        /// </summary>
         [MethodImpl(MethodImplOptions.Synchronized)]
         public IList<string> ResumeTriggers(GroupMatcher<TriggerKey> matcher)
         {
@@ -1091,6 +1176,10 @@ namespace Quartz.Impl.RavenDB
             return new List<string>(resumedGroups);
         }
 
+        /// <summary>
+        /// Gets the paused trigger groups.
+        /// </summary>
+        /// <returns></returns>
         [MethodImpl(MethodImplOptions.Synchronized)]
         public Collection.ISet<string> GetPausedTriggerGroups()
         {
@@ -1106,6 +1195,10 @@ namespace Quartz.Impl.RavenDB
             }
         }
 
+        /// <summary>
+        /// Gets the paused job groups.
+        /// </summary>
+        /// <returns></returns>
         [MethodImpl(MethodImplOptions.Synchronized)]
         public Collection.ISet<string> GetPausedJobGroups()
         {
@@ -1115,6 +1208,10 @@ namespace Quartz.Impl.RavenDB
             }
         }
 
+        /// <summary>
+        /// Gets the blocked jobs set.
+        /// </summary>
+        /// <returns></returns>
         [MethodImpl(MethodImplOptions.Synchronized)]
         public Collection.ISet<string> GetBlockedJobs()
         {
@@ -1124,6 +1221,15 @@ namespace Quartz.Impl.RavenDB
             }
         }
 
+        /// <summary> 
+        /// Resume (un-pause) the <see cref="IJob" /> with the
+        /// given key.
+        /// <para>
+        /// If any of the <see cref="IJob" />'s<see cref="ITrigger" /> s missed one
+        /// or more fire-times, then the <see cref="ITrigger" />'s misfire
+        /// instruction will be applied.
+        /// </para>
+        /// </summary>
         [MethodImpl(MethodImplOptions.Synchronized)]
         public void ResumeJob(JobKey jobKey)
         {
@@ -1247,7 +1353,7 @@ namespace Quartz.Impl.RavenDB
         /// <summary>
         /// Applies the misfire.
         /// </summary>
-        /// <param name="tw">The trigger wrapper.</param>
+        /// <param name="trigger">The trigger wrapper.</param>
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.Synchronized)]
         protected virtual bool ApplyMisfire(Trigger trigger)
@@ -1285,6 +1391,18 @@ namespace Quartz.Impl.RavenDB
             return true;
         }
 
+        /// <summary>
+        /// Get a handle to the next trigger to be fired, and mark it as 'reserved'
+        /// by the calling scheduler.
+        /// </summary>
+        /// <param name="noLaterThan">If &gt; 0, the JobStore should only return a Trigger
+        /// that will fire no later than the time represented in this value as
+        /// milliseconds.</param>
+        /// <param name="maxCount"></param>
+        /// <param name="timeWindow"></param>
+        /// <returns></returns>
+        /// <seealso cref="ITrigger">
+        /// </seealso>
         [MethodImpl(MethodImplOptions.Synchronized)]
         public virtual IList<IOperableTrigger> AcquireNextTriggers(DateTimeOffset noLaterThan, int maxCount, TimeSpan timeWindow)
         {
@@ -1335,8 +1453,6 @@ namespace Quartz.Impl.RavenDB
                         continue;
                     }
 
-                    //var triggerToUpdate = session.Include<Trigger>(x=>x.JobKey).Load(candidateTrigger.Key);
-
                     if (candidateTrigger.NextFireTimeUtc > noLaterThan + timeWindow)
                     {
                         break;
@@ -1373,11 +1489,14 @@ namespace Quartz.Impl.RavenDB
                 }
                 session.SaveChanges();
             }
-            //Log.Info("AcquireNextTriggers, Result:\n");
-            //result.ForEach(i => Console.Write("{0}\n", i.Key));
             return result;
         }
 
+        /// <summary> 
+        /// Inform the <see cref="IJobStore" /> that the scheduler no longer plans to
+        /// fire the given <see cref="ITrigger" />, that it had previously acquired
+        /// (reserved).
+        /// </summary>
         [MethodImpl(MethodImplOptions.Synchronized)]
         public void ReleaseAcquiredTrigger(IOperableTrigger trig)
         {
