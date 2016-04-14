@@ -19,12 +19,10 @@ Thumbs.db
 *.cache
 *.ilk
 *.log
+*.xsd
 [Bb]in
 [Dd]ebug*/
 *.lib
 *.sbr
 obj/
-[Rr]elease*/
-_ReSharper*/
-[Tt]est[Rr]esult*
 src/packages

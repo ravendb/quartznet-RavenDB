@@ -36,7 +36,7 @@ namespace Quartz.Impl.RavenDB
             ConcurrentExecutionDisallowed = newJob.ConcurrentExecutionDisallowed;
             PersistJobDataAfterExecution = newJob.PersistJobDataAfterExecution;
             RequestsRecovery = newJob.RequestsRecovery;
-            JobDataMap = new Dictionary<string, object>(newJob.JobDataMap);
+            JobDataMap = new Dictionary<string, object>(newJob.JobDataMap.WrappedMap);
         }
 
         public IJobDetail Deserialize()

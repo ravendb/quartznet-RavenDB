@@ -20,7 +20,7 @@ namespace Quartz.Impl.RavenDB
         public InternalTriggerState State { get; set; }
         public string Description { get; set; }
         public string CalendarName { get; set; }
-        public JobDataMap JobDataMap { get; set; }
+        public IDictionary<string, object> JobDataMap { get; set; }
         public string FireInstanceId { get; set; }
         public int MisfireInstruction { get; set; }
         public DateTimeOffset? FinalFireTimeUtc { get; set; }
@@ -42,7 +42,7 @@ namespace Quartz.Impl.RavenDB
         public class CronOptions
         {
             public string CronExpression { get; set; }
-            public TimeZoneInfo TimeZoneId { get; set; }
+            public string TimeZoneId { get; set; }
         }
 
         public class SimpleOptions
@@ -57,7 +57,7 @@ namespace Quartz.Impl.RavenDB
             public IntervalUnit RepeatIntervalUnit { get; set; }
             public int RepeatInterval { get; set; }
             public int TimesTriggered { get; set; }
-            public TimeZoneInfo TimeZone { get; set; }
+            public string TimeZoneId { get; set; }
             public bool PreserveHourOfDayAcrossDaylightSavings { get; set; }
             public bool SkipDayIfHourDoesNotExist { get; set; }
         }
@@ -71,7 +71,7 @@ namespace Quartz.Impl.RavenDB
             public TimeOfDay EndTimeOfDay { get; set; }
             public Collection.ISet<DayOfWeek> DaysOfWeek { get; set; }
             public int TimesTriggered { get; set; }
-            public TimeZoneInfo TimeZone { get; set; }
+            public string TimeZoneId { get; set; }
 
         }
 
@@ -90,7 +90,7 @@ namespace Quartz.Impl.RavenDB
             State = InternalTriggerState.Waiting;
             Description = newTrigger.Description;
             CalendarName = newTrigger.CalendarName;
-            JobDataMap = newTrigger.JobDataMap;
+            JobDataMap = newTrigger.JobDataMap.WrappedMap;
             FinalFireTimeUtc = newTrigger.FinalFireTimeUtc;
             MisfireInstruction = newTrigger.MisfireInstruction;
             Priority = newTrigger.Priority;
@@ -115,7 +115,7 @@ namespace Quartz.Impl.RavenDB
                 Cron = new CronOptions
                 {
                     CronExpression = cronTriggerImpl.CronExpressionString,
-                    TimeZoneId = cronTriggerImpl.TimeZone
+                    TimeZoneId = cronTriggerImpl.TimeZone.Id
                 };
                 return;
             }
@@ -139,7 +139,7 @@ namespace Quartz.Impl.RavenDB
                     RepeatIntervalUnit = calTriggerImpl.RepeatIntervalUnit,
                     RepeatInterval = calTriggerImpl.RepeatInterval,
                     TimesTriggered = calTriggerImpl.TimesTriggered,
-                    TimeZone = calTriggerImpl.TimeZone,
+                    TimeZoneId = calTriggerImpl.TimeZone.Id,
                     PreserveHourOfDayAcrossDaylightSavings = calTriggerImpl.PreserveHourOfDayAcrossDaylightSavings,
                     SkipDayIfHourDoesNotExist = calTriggerImpl.SkipDayIfHourDoesNotExist
                 };
@@ -158,7 +158,7 @@ namespace Quartz.Impl.RavenDB
                     EndTimeOfDay = dayTriggerImpl.EndTimeOfDay,
                     DaysOfWeek = dayTriggerImpl.DaysOfWeek,
                     TimesTriggered = dayTriggerImpl.TimesTriggered,
-                    TimeZone = dayTriggerImpl.TimeZone
+                    TimeZoneId = dayTriggerImpl.TimeZone.Id
                 };
             }
         }
@@ -173,7 +173,7 @@ namespace Quartz.Impl.RavenDB
                .StartAt(StartTimeUtc)
                .EndAt(EndTimeUtc)
                .ForJob(new JobKey(JobName,Group))
-               .UsingJobData(JobDataMap);
+               .UsingJobData(new JobDataMap(JobDataMap));
             
 
             if (Cron != null)
@@ -181,7 +181,7 @@ namespace Quartz.Impl.RavenDB
                 triggerBuilder = triggerBuilder.WithCronSchedule(Cron.CronExpression, builder =>
                 {
                     builder
-                        .InTimeZone(Cron.TimeZoneId);
+                        .InTimeZone(TimeZoneInfo.FindSystemTimeZoneById(Cron.TimeZoneId)); 
                 });
             }
             else if (Simp != null)
@@ -199,7 +199,7 @@ namespace Quartz.Impl.RavenDB
                 {
                     builder
                         .WithInterval(Cal.RepeatInterval, Cal.RepeatIntervalUnit)
-                        .InTimeZone(Cal.TimeZone)
+                        .InTimeZone(TimeZoneInfo.FindSystemTimeZoneById(Cal.TimeZoneId))
                         .PreserveHourOfDayAcrossDaylightSavings(Cal.PreserveHourOfDayAcrossDaylightSavings)
                         .SkipDayIfHourDoesNotExist(Cal.SkipDayIfHourDoesNotExist);
                 });
@@ -211,7 +211,7 @@ namespace Quartz.Impl.RavenDB
                     builder
                         .WithRepeatCount(Day.RepeatCount)
                         .WithInterval(Day.RepeatInterval, Day.RepeatIntervalUnit)
-                        .InTimeZone(Day.TimeZone)
+                        .InTimeZone(TimeZoneInfo.FindSystemTimeZoneById(Day.TimeZoneId))
                         .EndingDailyAt(Day.EndTimeOfDay)
                         .StartingDailyAt(Day.StartTimeOfDay)
                         .OnDaysOfTheWeek(Day.DaysOfWeek);
