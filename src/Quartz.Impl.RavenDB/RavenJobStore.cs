@@ -1419,8 +1419,7 @@ namespace Quartz.Impl.RavenDB
                     .ThenByDescending(t => t.Priority)
                     .ToList();
 
-                C5.TreeSet<Trigger> triggers = new C5.TreeSet<Trigger>(new TriggerComparator());
-                triggers.AddAll(triggersQuery);
+                var triggers = new SortedSet<Trigger>(triggersQuery, new TriggerComparator());
 
                 while (true)
                 {

@@ -2,7 +2,7 @@
 <package >
   <metadata>
     <id>Quartz.Impl.RavenDB</id>
-    <version>1.0.1</version>
+    <version>1.0.2</version>
     <title>Quartz.NET on ravenDB</title>
     <authors>Iftah Ben Zaken</authors>
     <owners>Iftah Ben Zaken</owners>
