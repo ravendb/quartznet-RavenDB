@@ -508,16 +508,6 @@ namespace Quartz.Impl.RavenDB
             {
                 var trigger = session.Load<Trigger>(triggerKey.Name + "/" + triggerKey.Group);
                 var job = RetrieveJob(new JobKey(trigger.JobName, trigger.Group));
-                var trigList = GetTriggersForJob(job.Key);
-
-                // Remove the trigger's job if it is not associated with any other triggers
-                if ((trigList == null || trigList.Count == 0) && !job.Durable)
-                {
-                    if (RemoveJob(job.Key))
-                    {
-                        signaler.NotifySchedulerListenersJobDeleted(job.Key);
-                    }
-                }
 
                 // Delete trigger
                 session.Advanced.Defer(new DeleteCommandData
@@ -525,6 +515,16 @@ namespace Quartz.Impl.RavenDB
                     Key = triggerKey.Name + "/" + triggerKey.Group
                 });
                 session.SaveChanges();
+
+                // Remove the trigger's job if it is not associated with any other triggers
+                var trigList = GetTriggersForJob(job.Key);
+                if ((trigList == null || trigList.Count == 0) && !job.Durable)
+                {
+                    if (RemoveJob(job.Key))
+                    {
+                        signaler.NotifySchedulerListenersJobDeleted(job.Key);
+                    }
+                }
             }
             return true;
         }
