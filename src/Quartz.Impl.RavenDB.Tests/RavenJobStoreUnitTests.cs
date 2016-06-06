@@ -422,7 +422,8 @@ namespace Quartz.Impl.RavenDB.Tests
         public void TestBasicStorageFunctions()
         {
             fJobStore.ClearAllSchedulingData();
-
+            // ToDo: Test will fail if it runs after other tests. need to rewrite SetUp() for this one
+            // Test passes if run by its own... basic functions work.
             NameValueCollection properties = new NameValueCollection
             {
                 // Setting some scheduler properties
