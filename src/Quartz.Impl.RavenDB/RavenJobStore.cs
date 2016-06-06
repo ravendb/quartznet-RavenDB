@@ -391,7 +391,7 @@ namespace Quartz.Impl.RavenDB
         {
             using (var session = DocumentStoreHolder.Store.OpenSession())
             {
-                if (CheckExists(jobKey))
+                if (!CheckExists(jobKey))
                 {
                     return false;
                 }
