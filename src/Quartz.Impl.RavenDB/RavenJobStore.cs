@@ -518,6 +518,13 @@ namespace Quartz.Impl.RavenDB
                         signaler.NotifySchedulerListenersJobDeleted(job.Key);
                     }
                 }
+
+                // Delete trigger
+                session.Advanced.Defer(new DeleteCommandData
+                {
+                    Key = triggerKey.Name + "/" + triggerKey.Group
+                });
+                session.SaveChanges();
             }
             return true;
         }
