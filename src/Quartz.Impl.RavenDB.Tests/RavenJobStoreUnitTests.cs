@@ -29,6 +29,8 @@ using Quartz.Job;
 using Quartz.Simpl;
 using Quartz.Spi;
 using System.Collections.Specialized;
+using System.Globalization;
+using System.Threading;
 
 namespace Quartz.Impl.RavenDB.Tests
 {
@@ -46,14 +48,22 @@ namespace Quartz.Impl.RavenDB.Tests
         [SetUp]
         public void SetUp()
         {
-            
             fJobStore = new RavenJobStore();
+            fJobStore.ClearAllSchedulingData();
+            Thread.Sleep(1000);
+        }
+
+        private void InitJobStore()
+        {
+
+            fJobStore = new RavenJobStore();
+
             fJobStore.ClearAllSchedulingData();
             fSignaler = new SampleSignaler();
             fJobStore.Initialize(null, fSignaler);
             fJobStore.SchedulerStarted();
 
-            fJobDetail = new JobDetailImpl("job1", "jobGroup1", typeof (NoOpJob));
+            fJobDetail = new JobDetailImpl("job1", "jobGroup1", typeof(NoOpJob));
             fJobDetail.Durable = true;
             fJobStore.StoreJob(fJobDetail, true);
         }
@@ -61,6 +71,8 @@ namespace Quartz.Impl.RavenDB.Tests
         [Test]
         public void TestAcquireNextTrigger()
         {
+            InitJobStore();
+
             DateTimeOffset d = DateBuilder.EvenMinuteDateAfterNow();
             IOperableTrigger trigger1 = new SimpleTriggerImpl("trigger1", "triggerGroup1", fJobDetail.Name, fJobDetail.Group, d.AddSeconds(200), d.AddSeconds(200), 2, TimeSpan.FromSeconds(2));
             IOperableTrigger trigger2 = new SimpleTriggerImpl("trigger2", "triggerGroup1", fJobDetail.Name, fJobDetail.Group, d.AddSeconds(50), d.AddSeconds(200), 2, TimeSpan.FromSeconds(2));
@@ -90,6 +102,8 @@ namespace Quartz.Impl.RavenDB.Tests
         [Test]
         public void TestAcquireNextTriggerBatch()
         {
+            InitJobStore();
+
             DateTimeOffset d = DateBuilder.EvenMinuteDateAfterNow();
             
             IOperableTrigger early = new SimpleTriggerImpl("early", "triggerGroup1", fJobDetail.Name, fJobDetail.Group, d, d.AddMilliseconds(5), 2, TimeSpan.FromSeconds(2));
@@ -175,6 +189,8 @@ namespace Quartz.Impl.RavenDB.Tests
         [Test]
         public void TestTriggerStates()
         {
+            InitJobStore();
+
             IOperableTrigger trigger = new SimpleTriggerImpl("trigger1", "triggerGroup1", fJobDetail.Name, fJobDetail.Group, DateTimeOffset.Now.AddSeconds(100), DateTimeOffset.Now.AddSeconds(200), 2, TimeSpan.FromSeconds(2));
             trigger.ComputeFirstFireTimeUtc(null);
             Assert.AreEqual(TriggerState.None, fJobStore.GetTriggerState(trigger.Key));
@@ -198,6 +214,8 @@ namespace Quartz.Impl.RavenDB.Tests
         [Test]
         public void TestRemoveCalendarWhenTriggersPresent()
         {
+            InitJobStore();
+
             // QRTZNET-29
 
             IOperableTrigger trigger = new SimpleTriggerImpl("trigger1", "triggerGroup1", fJobDetail.Name, fJobDetail.Group, DateTimeOffset.Now.AddSeconds(100), DateTimeOffset.Now.AddSeconds(200), 2, TimeSpan.FromSeconds(2));
@@ -212,6 +230,8 @@ namespace Quartz.Impl.RavenDB.Tests
         [Test]
         public void TestStoreTriggerReplacesTrigger()
         {
+            InitJobStore();
+
             string jobName = "StoreJobReplacesJob";
             string jobGroup = "StoreJobReplacesJobGroup";
             JobDetailImpl detail = new JobDetailImpl(jobName, jobGroup, typeof (NoOpJob));
@@ -246,6 +266,8 @@ namespace Quartz.Impl.RavenDB.Tests
         [Test]
         public void PauseJobGroupPausesNewJob()
         {
+            InitJobStore();
+
             string jobName1 = "PauseJobGroupPausesNewJob";
             string jobName2 = "PauseJobGroupPausesNewJob2";
             string jobGroup = "PauseJobGroupPausesNewJobGroup";
@@ -269,6 +291,8 @@ namespace Quartz.Impl.RavenDB.Tests
         [Test]
         public void TestRetrieveJob_NoJobFound()
         {
+            InitJobStore();
+
             var store = new RavenJobStore();
             IJobDetail job = store.RetrieveJob(new JobKey("not", "existing"));
             Assert.IsNull(job);
@@ -277,6 +301,8 @@ namespace Quartz.Impl.RavenDB.Tests
         [Test]
         public void TestRetrieveTrigger_NoTriggerFound()
         {
+            InitJobStore();
+
             var store = new RavenJobStore();
             IOperableTrigger trigger = store.RetrieveTrigger(new TriggerKey("not", "existing"));
             Assert.IsNull(trigger);
@@ -285,6 +311,8 @@ namespace Quartz.Impl.RavenDB.Tests
         [Test]
         public void testStoreAndRetrieveJobs()
         {
+            InitJobStore();
+
             var store = new RavenJobStore();
 
             // Store jobs.
@@ -305,6 +333,8 @@ namespace Quartz.Impl.RavenDB.Tests
         [Test]
         public void TestStoreAndRetrieveTriggers()
         {
+            InitJobStore();
+
             var store = new RavenJobStore();
             store.SchedulerStarted();
 
@@ -333,6 +363,8 @@ namespace Quartz.Impl.RavenDB.Tests
         [Test]
         public void TestAcquireTriggers()
         {
+            InitJobStore();
+
             ISchedulerSignaler schedSignaler = new SampleSignaler();
             ITypeLoadHelper loadHelper = new SimpleTypeLoadHelper();
             loadHelper.Initialize();
@@ -376,6 +408,8 @@ namespace Quartz.Impl.RavenDB.Tests
         [Test]
         public void TestAcquireTriggersInBatch()
         {
+            InitJobStore();
+
             ISchedulerSignaler schedSignaler = new SampleSignaler();
             ITypeLoadHelper loadHelper = new SimpleTypeLoadHelper();
             loadHelper.Initialize();
@@ -411,31 +445,11 @@ namespace Quartz.Impl.RavenDB.Tests
                 Assert.AreEqual("trigger" + i, triggers[i].Key.Name);
             }
         }
-        public class TestJob : IJob
-        {
-            public void Execute(IJobExecutionContext context)
-            {
-            }
-        }
 
         [Test]
         public void TestBasicStorageFunctions()
         {
-            fJobStore.ClearAllSchedulingData();
-            // ToDo: Test will fail if it runs after other tests. need to rewrite SetUp() for this one
-            // Test passes if run by its own... basic functions work.
-            NameValueCollection properties = new NameValueCollection
-            {
-                // Setting some scheduler properties
-                ["quartz.scheduler.instanceName"] = "SchedulerTest_Scheduler",
-                ["quartz.scheduler.instanceId"] = "AUTO",
-                ["quartz.threadPool.threadCount"] = "2",
-                ["quartz.threadPool.type"] = "Quartz.Simpl.SimpleThreadPool, Quartz",
-                // Setting RavenDB as the persisted JobStore
-                ["quartz.jobStore.type"] = "Quartz.Impl.RavenDB.RavenJobStore, Quartz.Impl.RavenDB",
-            };
-
-            IScheduler sched = new StdSchedulerFactory(properties).GetScheduler();
+            var sched = CreateScheduler("TestBasicStorageFunctions", 2);
             sched.Start();
 
             // test basic storage functions of scheduler...
@@ -598,6 +612,311 @@ namespace Quartz.Impl.RavenDB.Tests
             Assert.AreEqual(0, triggerKeys.Count, "Number of triggers expected in default group was 0 ");
 
             sched.Shutdown();
+        }
+
+        private IScheduler CreateScheduler(string name, int threadCount)
+        {
+            NameValueCollection properties = new NameValueCollection
+            {
+                // Setting some scheduler properties
+                ["quartz.scheduler.instanceName"] = name + "Scheduler",
+                ["quartz.scheduler.instanceId"] = "AUTO",
+                ["quartz.threadPool.threadCount"] = threadCount.ToString(CultureInfo.InvariantCulture),
+                ["quartz.threadPool.type"] = "Quartz.Simpl.SimpleThreadPool, Quartz",
+                // Setting RavenDB as the persisted JobStore
+                ["quartz.jobStore.type"] = "Quartz.Impl.RavenDB.RavenJobStore, Quartz.Impl.RavenDB",
+            };
+
+            IScheduler sched = new StdSchedulerFactory(properties).GetScheduler();
+            return sched;
+        }
+
+        private const string Barrier = "BARRIER";
+        private const string DateStamps = "DATE_STAMPS";
+        [DisallowConcurrentExecution]
+        [PersistJobDataAfterExecution]
+        public class TestStatefulJob : IJob
+        {
+            public void Execute(IJobExecutionContext context)
+            {
+            }
+        }
+
+        public class TestJob : IJob
+        {
+            public void Execute(IJobExecutionContext context)
+            {
+            }
+        }
+
+        private static readonly TimeSpan testTimeout = TimeSpan.FromSeconds(125);
+
+        public class TestJobWithSync : IJob
+        {
+            public void Execute(IJobExecutionContext context)
+            {
+                try
+                {
+                    List<DateTime> jobExecTimestamps = (List<DateTime>) context.Scheduler.Context.Get(DateStamps);
+                    Barrier barrier = (Barrier) context.Scheduler.Context.Get(Barrier);
+
+                    jobExecTimestamps.Add(DateTime.UtcNow);
+
+                    barrier.SignalAndWait(testTimeout);
+                }
+                catch (Exception e)
+                {
+                    Console.Write(e);
+                    Assert.Fail("Await on barrier was interrupted: " + e);
+                }
+            }
+        }
+
+        [DisallowConcurrentExecution]
+        [PersistJobDataAfterExecution]
+        public class TestAnnotatedJob : IJob
+        {
+            public void Execute(IJobExecutionContext context)
+            {
+            }
+        }
+        [Test]
+        public void TestAbilityToFireImmediatelyWhenStartedBefore()
+        {
+            List<DateTime> jobExecTimestamps = new List<DateTime>();
+            Barrier barrier = new Barrier(2);
+
+            IScheduler sched = CreateScheduler("testAbilityToFireImmediatelyWhenStartedBefore", 5);
+            sched.Context.Put(Barrier, barrier);
+            sched.Context.Put(DateStamps, jobExecTimestamps);
+            sched.Start();
+
+            Thread.Yield();
+
+            IJobDetail job1 = JobBuilder.Create<TestJobWithSync>()
+                .WithIdentity("job1")
+                .Build();
+
+            ITrigger trigger1 = TriggerBuilder.Create()
+                .ForJob(job1)
+                .Build();
+
+            DateTime sTime = DateTime.UtcNow;
+
+            sched.ScheduleJob(job1, trigger1);
+
+            barrier.SignalAndWait(testTimeout);
+
+            sched.Shutdown(false);
+
+            DateTime fTime = jobExecTimestamps[0];
+
+            Assert.That(fTime - sTime < TimeSpan.FromMilliseconds(7000), "Immediate trigger did not fire within a reasonable amount of time.");
+        }
+
+        [Test]
+        public void TestAbilityToFireImmediatelyWhenStartedBeforeWithTriggerJob()
+        {
+            List<DateTime> jobExecTimestamps = new List<DateTime>();
+            Barrier barrier = new Barrier(2);
+
+            IScheduler sched = CreateScheduler("testAbilityToFireImmediatelyWhenStartedBeforeWithTriggerJob", 5);
+            sched.Clear();
+
+            sched.Context.Put(Barrier, barrier);
+            sched.Context.Put(DateStamps, jobExecTimestamps);
+
+            sched.Start();
+
+            Thread.Yield();
+
+            IJobDetail job1 = JobBuilder.Create<TestJobWithSync>()
+                .WithIdentity("job1").
+                StoreDurably().Build();
+            sched.AddJob(job1, false);
+
+            DateTime sTime = DateTime.UtcNow;
+
+            sched.TriggerJob(job1.Key);
+
+            barrier.SignalAndWait(testTimeout);
+
+            sched.Shutdown(false);
+
+            DateTime fTime = jobExecTimestamps[0];
+
+            Assert.That(fTime - sTime < TimeSpan.FromMilliseconds(7000), "Immediate trigger did not fire within a reasonable amount of time."); // This is dangerously subjective!  but what else to do?
+        }
+
+        [Test]
+        public void TestAbilityToFireImmediatelyWhenStartedAfter()
+        {
+            List<DateTime> jobExecTimestamps = new List<DateTime>();
+
+            Barrier barrier = new Barrier(2);
+
+            IScheduler sched = CreateScheduler("testAbilityToFireImmediatelyWhenStartedAfter", 5);
+
+            sched.Context.Put(Barrier, barrier);
+            sched.Context.Put(DateStamps, jobExecTimestamps);
+
+            IJobDetail job1 = JobBuilder.Create<TestJobWithSync>().WithIdentity("job1").Build();
+            ITrigger trigger1 = TriggerBuilder.Create().ForJob(job1).Build();
+
+            DateTime sTime = DateTime.UtcNow;
+
+            sched.Start();
+            sched.ScheduleJob(job1, trigger1);
+
+            barrier.SignalAndWait(testTimeout);
+
+            sched.Shutdown(false);
+
+            DateTime fTime = jobExecTimestamps[0];
+
+            Assert.That((fTime - sTime < TimeSpan.FromMilliseconds(7000)), "Immediate trigger did not fire within a reasonable amount of time."); // This is dangerously subjective!  but what else to do?
+        }
+
+        [Test]
+        public void TestScheduleMultipleTriggersForAJob()
+        {
+            IJobDetail job = JobBuilder.Create<TestJob>().WithIdentity("job1", "group1").Build();
+            ITrigger trigger1 = TriggerBuilder.Create()
+                .WithIdentity("trigger1", "group1")
+                .StartNow()
+                .WithSimpleSchedule(x => x.WithIntervalInSeconds(1).RepeatForever())
+                .Build();
+            ITrigger trigger2 = TriggerBuilder.Create()
+                .WithIdentity("trigger2", "group1")
+                .StartNow()
+                .WithSimpleSchedule(x => x.WithIntervalInSeconds(1).RepeatForever())
+                .Build();
+
+            Collection.ISet<ITrigger> triggersForJob = new Collection.HashSet<ITrigger>();
+            triggersForJob.Add(trigger1);
+            triggersForJob.Add(trigger2);
+
+            IScheduler sched = CreateScheduler("testScheduleMultipleTriggersForAJob", 5);
+            sched.Start();
+
+
+            sched.ScheduleJob(job, triggersForJob, true);
+
+            IList<ITrigger> triggersOfJob = sched.GetTriggersOfJob(job.Key);
+            Assert.That(triggersOfJob.Count, Is.EqualTo(2));
+            Assert.That(triggersOfJob.Contains(trigger1));
+            Assert.That(triggersOfJob.Contains(trigger2));
+
+            sched.Shutdown(false);
+        }
+
+        [Test]
+        public void TestDurableStorageFunctions()
+        {
+            IScheduler sched = CreateScheduler("testDurableStorageFunctions", 2);
+            sched.Clear();
+
+            // test basic storage functions of scheduler...
+
+            IJobDetail job = JobBuilder.Create<TestJob>()
+                .WithIdentity("j1")
+                .StoreDurably()
+                .Build();
+
+            Assert.That(sched.CheckExists(new JobKey("j1")), Is.False, "Unexpected existence of job named 'j1'.");
+
+            sched.AddJob(job, false);
+
+            Assert.That(sched.CheckExists(new JobKey("j1")), "Unexpected non-existence of job named 'j1'.");
+
+            IJobDetail nonDurableJob = JobBuilder.Create<TestJob>()
+                .WithIdentity("j2")
+                .Build();
+
+            try
+            {
+                sched.AddJob(nonDurableJob, false);
+                Assert.Fail("Storage of non-durable job should not have succeeded.");
+            }
+            catch (SchedulerException)
+            {
+                Assert.That(sched.CheckExists(new JobKey("j2")), Is.False, "Unexpected existence of job named 'j2'.");
+            }
+
+            sched.AddJob(nonDurableJob, false, true);
+
+            Assert.That(sched.CheckExists(new JobKey("j2")), "Unexpected non-existence of job named 'j2'.");
+        }
+
+        [Test]
+        public void TestShutdownWithoutWaitIsUnclean()
+        {
+            List<DateTime> jobExecTimestamps = new List<DateTime>();
+            Barrier barrier = new Barrier(2);
+            IScheduler scheduler = CreateScheduler("testShutdownWithoutWaitIsUnclean", 8);
+            try
+            {
+                scheduler.Context.Put(Barrier, barrier);
+                scheduler.Context.Put(DateStamps, jobExecTimestamps);
+                scheduler.Start();
+                string jobName = Guid.NewGuid().ToString();
+                scheduler.AddJob(JobBuilder.Create<TestJobWithSync>().WithIdentity(jobName).StoreDurably().Build(), false);
+                scheduler.ScheduleJob(TriggerBuilder.Create().ForJob(jobName).StartNow().Build());
+                while (scheduler.GetCurrentlyExecutingJobs().Count == 0)
+                {
+                    Thread.Sleep(50);
+                }
+            }
+            finally
+            {
+                scheduler.Shutdown(false);
+            }
+
+            barrier.SignalAndWait(testTimeout);
+        }
+
+        [Test]
+        public void TestShutdownWithWaitIsClean()
+        {
+            bool shutdown = false;
+            List<DateTime> jobExecTimestamps = new List<DateTime>();
+            Barrier barrier = new Barrier(2);
+            IScheduler scheduler = CreateScheduler("testShutdownWithoutWaitIsUnclean", 8);
+            try
+            {
+                scheduler.Context.Put(Barrier, barrier);
+                scheduler.Context.Put(DateStamps, jobExecTimestamps);
+                scheduler.Start();
+                string jobName = Guid.NewGuid().ToString();
+                scheduler.AddJob(JobBuilder.Create<TestJobWithSync>().WithIdentity(jobName).StoreDurably().Build(), false);
+                scheduler.ScheduleJob(TriggerBuilder.Create().ForJob(jobName).StartNow().Build());
+                while (scheduler.GetCurrentlyExecutingJobs().Count == 0)
+                {
+                    Thread.Sleep(50);
+                }
+            }
+            finally
+            {
+                ThreadStart threadStart = () =>
+                                          {
+                                              try
+                                              {
+                                                  scheduler.Shutdown(true);
+                                                  shutdown = true;
+                                              }
+                                              catch (SchedulerException ex)
+                                              {
+                                                  throw new Exception("exception: " + ex.Message, ex);
+                                              }
+                                          };
+
+                var t = new Thread(threadStart);
+                t.Start();
+                Thread.Sleep(1000);
+                Assert.That(shutdown, Is.False);
+                barrier.SignalAndWait(testTimeout);
+                t.Join();
+            }
         }
 
         public class SampleSignaler : ISchedulerSignaler
