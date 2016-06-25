@@ -15,7 +15,8 @@ namespace Quartz.Impl.RavenDB
             var documentStore = new DocumentStore()
             {
                 Url = RavenJobStore.Url,
-                DefaultDatabase = RavenJobStore.DefaultDatabase
+                DefaultDatabase = RavenJobStore.DefaultDatabase,
+                ApiKey = RavenJobStore.ApiKey
             };
 
             // For multithreaded debugging need to uncomment next line (prints thread id and stack trace)

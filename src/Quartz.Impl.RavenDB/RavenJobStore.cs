@@ -57,7 +57,7 @@ namespace Quartz.Impl.RavenDB
         public static string defaultConnectionString = "Url=http://localhost:8080;DefaultDatabase=MyDatabaseName";
         public static string Url { get; set; }
         public static string DefaultDatabase { get; set; }
-
+        public static string ApiKey { get; set; }
         protected ILog Log { get; }
 
         public RavenJobStore()
@@ -74,7 +74,8 @@ namespace Quartz.Impl.RavenDB
            
             Url = stringBuilder["Url"] as string;
             DefaultDatabase = stringBuilder["DefaultDatabase"] as string;
-         
+            ApiKey = stringBuilder["ApiKey"] as string;
+
             InstanceName = "UnitTestScheduler";
             InstanceId = "instance_two";
 
