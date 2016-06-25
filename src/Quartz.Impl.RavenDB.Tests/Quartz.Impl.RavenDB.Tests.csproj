@@ -57,6 +57,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="RavenJobStoreIssueNo5.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="RavenJobStoreUnitTests.cs" />
   </ItemGroup>
