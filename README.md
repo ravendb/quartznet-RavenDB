@@ -23,10 +23,10 @@ you must add the following configuration property:
 ```
 quartz.jobStore.type = Quartz.Impl.RavenDB.RavenJobStore, Quartz.Impl.RavenDB
 ```
-Also, the following configuration must be added to app.config or web.config (change the connection string according to your server url and database name).
+Also, the following configuration must be added to app.config or web.config (change the connection string according to your server url, database name and ApiKey).
 ```
   <connectionStrings>
-    <add name="quartznet-ravendb" connectionString="Url=http://localhost:8080;DefaultDatabase=MyDatabaseName"/>
+    <add name="quartznet-ravendb" connectionString="Url=http://localhost:8080;DefaultDatabase=MyDatabaseName;ApiKey=MyKey/MySecret"/>
   </connectionStrings>
 ```
 
