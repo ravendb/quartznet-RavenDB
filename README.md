@@ -4,7 +4,14 @@ JobStore implementation for Quartz.NET scheduler using RavenDB.
 ###### About
 [Quartz.NET](https://github.com/quartznet/quartznet) is a full-featured, open source job scheduling system that can be used from smallest apps to large scale enterprise systems.
 
-[Quartz.NET on RavenDB](https://github.com/iftahbe/quartznet-RavenDB) is a new provider written for Quartz.NET which lets us use the  [RavenDB](https://ravendb.net/features) NoSQL database as the persistent Job Store for scheduling data (instead of the SQL solutions that are built-in Quartz.NET).
+[Quartz.NET on RavenDB](https://github.com/ravendb/quartznet-RavenDB) is a new provider written for Quartz.NET which lets us use the  [RavenDB](https://ravendb.net/features) NoSQL database as the persistent Job Store for scheduling data (instead of the SQL solutions that are built-in Quartz.NET).
+
+###### Release Notes
+* 1.0.5 - Fixed authentication problem when using ApiKey in the connection string	
+* 1.0.4 - Fixed misfire handling bug causing jobs not to fire. 
+* 1.0.3 - Fixed a bug causing jobs and triggers not to be deleted.
+* 1.0.2 - Removed C5 dependency & minor bug fixes.
+* 1.0.0 - Initial release.
 
 ###### Installation
 First add scheduling to your app using Quartz.NET ([example](http://www.quartz-scheduler.net/documentation/quartz-2.x/quick-start.html)).
@@ -44,4 +51,4 @@ ISchedulerFactory sf = new StdSchedulerFactory(properties);
 IScheduler scheduler = sf.GetScheduler();
 ```
 
-You can also take a look at the following [demo](https://github.com/iftahbe/quartznet-RavenDB/blob/master/src/Examples/RavenJobStoreDemo.cs) and you are more than welcome to contribute and make suggestions for improvements.
+You can also take a look at the following [demo](https://github.com/ravendb/quartznet-RavenDB/blob/master/src/Examples/RavenJobStoreDemo.cs) and you are more than welcome to contribute and make suggestions for improvements.
