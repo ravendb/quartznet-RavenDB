@@ -74,7 +74,7 @@ namespace Quartz.Impl.RavenDB
            
             Url = stringBuilder["Url"] as string;
             DefaultDatabase = stringBuilder["DefaultDatabase"] as string;
-            ApiKey = stringBuilder["ApiKey"] as string;
+            ApiKey = stringBuilder.ContainsKey("ApiKey") ? stringBuilder["ApiKey"] as string : null;
 
             InstanceName = "UnitTestScheduler";
             InstanceId = "instance_two";
