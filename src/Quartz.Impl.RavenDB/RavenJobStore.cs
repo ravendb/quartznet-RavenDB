@@ -1548,66 +1548,72 @@ namespace Quartz.Impl.RavenDB
             List<TriggerFiredResult> results = new List<TriggerFiredResult>();
             using (var session = DocumentStoreHolder.Store.OpenSession())
             {
-                foreach (IOperableTrigger tr in triggers)
+                try
                 {
-                    // was the trigger deleted since being acquired?
-                    var trigger = session.Load<Trigger>(tr.Key.Name + "/" + tr.Key.Group);
-
-                    // was the trigger completed, paused, blocked, etc. since being acquired?
-                    if (trigger?.State != InternalTriggerState.Acquired)
+                    foreach (IOperableTrigger tr in triggers)
                     {
-                        continue;
-                    }
+                        // was the trigger deleted since being acquired?
+                        var trigger = session.Load<Trigger>(tr.Key.Name + "/" + tr.Key.Group);
 
-                    ICalendar cal = null;
-                    if (trigger.CalendarName != null)
-                    {
-                        cal = RetrieveCalendar(trigger.CalendarName);
-                        if (cal == null)
+                        // was the trigger completed, paused, blocked, etc. since being acquired?
+                        if (trigger?.State != InternalTriggerState.Acquired)
                         {
                             continue;
                         }
-                    }
-                    DateTimeOffset? prevFireTime = trigger.PreviousFireTimeUtc;
 
-                    var trig = trigger.Deserialize();
-                    trig.Triggered(cal);
-
-                    TriggerFiredBundle bndle = new TriggerFiredBundle(RetrieveJob(trig.JobKey),
-                        trig,
-                        cal,
-                        false, SystemTime.UtcNow(),
-                        trig.GetPreviousFireTimeUtc(), prevFireTime,
-                        trig.GetNextFireTimeUtc());
-
-                    IJobDetail job = bndle.JobDetail;
-
-                    trigger.UpdateFireTimes(trig);
-                    trigger.State = InternalTriggerState.Waiting;
-
-                    if (job.ConcurrentExecutionDisallowed)
-                    {
-                        var trigs = session.Query<Trigger>()
-                            .Where(t => Equals(t.Group, job.Key.Group) && Equals(t.JobName, job.Key.Name));
-
-                        foreach (var t in trigs)
+                        ICalendar cal = null;
+                        if (trigger.CalendarName != null)
                         {
-                            if (t.State == InternalTriggerState.Waiting)
+                            cal = RetrieveCalendar(trigger.CalendarName);
+                            if (cal == null)
                             {
-                                t.State = InternalTriggerState.Blocked;
-                            }
-                            if (t.State == InternalTriggerState.Paused)
-                            {
-                                t.State = InternalTriggerState.PausedAndBlocked;
+                                continue;
                             }
                         }
-                        var sched = session.Load<Scheduler>(InstanceName);
-                        sched.BlockedJobs.Add(job.Key.Name + "/" + job.Key.Group);
-                    }
+                        DateTimeOffset? prevFireTime = trigger.PreviousFireTimeUtc;
 
-                    results.Add(new TriggerFiredResult(bndle));
+                        var trig = trigger.Deserialize();
+                        trig.Triggered(cal);
+
+                        TriggerFiredBundle bndle = new TriggerFiredBundle(RetrieveJob(trig.JobKey),
+                            trig,
+                            cal,
+                            false, SystemTime.UtcNow(),
+                            trig.GetPreviousFireTimeUtc(), prevFireTime,
+                            trig.GetNextFireTimeUtc());
+
+                        IJobDetail job = bndle.JobDetail;
+
+                        trigger.UpdateFireTimes(trig);
+                        trigger.State = InternalTriggerState.Waiting;
+
+                        if (job.ConcurrentExecutionDisallowed)
+                        {
+                            var trigs = session.Query<Trigger>()
+                                .Where(t => Equals(t.Group, job.Key.Group) && Equals(t.JobName, job.Key.Name));
+
+                            foreach (var t in trigs)
+                            {
+                                if (t.State == InternalTriggerState.Waiting)
+                                {
+                                    t.State = InternalTriggerState.Blocked;
+                                }
+                                if (t.State == InternalTriggerState.Paused)
+                                {
+                                    t.State = InternalTriggerState.PausedAndBlocked;
+                                }
+                            }
+                            var sched = session.Load<Scheduler>(InstanceName);
+                            sched.BlockedJobs.Add(job.Key.Name + "/" + job.Key.Group);
+                        }
+
+                        results.Add(new TriggerFiredResult(bndle));
+                    }
                 }
-                session.SaveChanges();
+                finally
+                {
+                    session.SaveChanges();
+                }
             }
             return results;
 
