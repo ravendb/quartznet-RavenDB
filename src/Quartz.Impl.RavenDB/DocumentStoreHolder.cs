@@ -1,6 +1,5 @@
 ﻿using System;
-using Raven.Client;
-using Raven.Client.Document;
+using Raven.Client.Documents;
 
 namespace Quartz.Impl.RavenDB
 {
@@ -14,16 +13,15 @@ namespace Quartz.Impl.RavenDB
         {
             var documentStore = new DocumentStore()
             {
-                Url = RavenJobStore.Url,
-                DefaultDatabase = RavenJobStore.DefaultDatabase,
-                ApiKey = RavenJobStore.ApiKey
+                Urls = new[] { RavenJobStore.Url },
+                Database = RavenJobStore.DefaultDatabase
             };
 
             // For multithreaded debugging need to uncomment next line (prints thread id and stack trace)
             //documentStore.RegisterListener(new ThreadPrinter());
 
             documentStore.Initialize();
-            documentStore.Conventions.DefaultQueryingConsistency = ConsistencyOptions.AlwaysWaitForNonStaleResultsAsOfLastWrite;
+            //documentStore.Conventions.DefaultQueryingConsistency = ConsistencyOptions.AlwaysWaitForNonStaleResultsAsOfLastWrite;
             return documentStore;
         }
     }

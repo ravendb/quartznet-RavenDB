@@ -68,7 +68,7 @@ namespace Quartz.Impl.RavenDB
             public int RepeatInterval { get; set; }
             public TimeOfDay StartTimeOfDay { get; set; }
             public TimeOfDay EndTimeOfDay { get; set; }
-            public Collection.ISet<DayOfWeek> DaysOfWeek { get; set; }
+            public IReadOnlyCollection<DayOfWeek> DaysOfWeek { get; set; }
             public int TimesTriggered { get; set; }
             public string TimeZoneId { get; set; }
 

@@ -14,11 +14,6 @@ using Quartz.Impl.Matchers;
 using Quartz.Spi;
 using Quartz.Simpl;
 
-using Raven.Abstractions.Commands;
-using Raven.Abstractions.Data;
-using Raven.Abstractions.Extensions;
-using Raven.Client.Linq;
-
 namespace Quartz.Impl.RavenDB
 {
     /// <summary> 
@@ -40,7 +35,7 @@ namespace Quartz.Impl.RavenDB
     /// <seealso cref="JobDataMap" />
     /// <seealso cref="ICalendar" />
     /// <author>Iftah Ben Zaken</author>
-    public class RavenJobStore : IJobStore
+    public partial class RavenJobStore : IJobStore
     {
         private TimeSpan misfireThreshold = TimeSpan.FromSeconds(5);
         private ISchedulerSignaler signaler;
@@ -346,7 +341,7 @@ namespace Quartz.Impl.RavenDB
         }
 
         [MethodImpl(MethodImplOptions.Synchronized)]
-        public void StoreJobsAndTriggers(IDictionary<IJobDetail, Collection.ISet<ITrigger>> triggersAndJobs, bool replace)
+        public void StoreJobsAndTriggers(IDictionary<IJobDetail, ISet<ITrigger>> triggersAndJobs, bool replace)
         {
             using (var bulkInsert = DocumentStoreHolder.Store.BulkInsert(options: new BulkInsertOptions() { OverwriteExisting = replace }))
             {
@@ -853,12 +848,12 @@ namespace Quartz.Impl.RavenDB
         /// <param name="matcher"></param>
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.Synchronized)]
-        public Collection.ISet<JobKey> GetJobKeys(GroupMatcher<JobKey> matcher)
+        public ISet<JobKey> GetJobKeys(GroupMatcher<JobKey> matcher)
         {
             StringOperator op = matcher.CompareWithOperator;
             string compareToValue = matcher.CompareToValue;
 
-            var result = new Collection.HashSet<JobKey>();
+            var result = new HashSet<JobKey>();
 
             using (var session = DocumentStoreHolder.Store.OpenSession())
             {
@@ -884,12 +879,12 @@ namespace Quartz.Impl.RavenDB
         /// </para>
         /// </summary>
         [MethodImpl(MethodImplOptions.Synchronized)]
-        public Collection.ISet<TriggerKey> GetTriggerKeys(GroupMatcher<TriggerKey> matcher)
+        public ISet<TriggerKey> GetTriggerKeys(GroupMatcher<TriggerKey> matcher)
         {
             StringOperator op = matcher.CompareWithOperator;
             string compareToValue = matcher.CompareToValue;
 
-            var result = new Collection.HashSet<TriggerKey>();
+            var result = new HashSet<TriggerKey>();
 
             using (var session = DocumentStoreHolder.Store.OpenSession())
             {
@@ -1070,7 +1065,7 @@ namespace Quartz.Impl.RavenDB
         /// paused.
         /// </remarks>
         [MethodImpl(MethodImplOptions.Synchronized)]
-        public Collection.ISet<string> PauseTriggers(GroupMatcher<TriggerKey> matcher)
+        public ISet<string> PauseTriggers(GroupMatcher<TriggerKey> matcher)
         {
             var pausedGroups = new HashSet<string>();
 
@@ -1080,7 +1075,7 @@ namespace Quartz.Impl.RavenDB
                 PauseTrigger(triggerKey);
                 pausedGroups.Add(triggerKey.Group);
             }
-            return new Collection.HashSet<string>(pausedGroups);
+            return new HashSet<string>(pausedGroups);
         }
 
         /// <summary>
@@ -1179,8 +1174,8 @@ namespace Quartz.Impl.RavenDB
         [MethodImpl(MethodImplOptions.Synchronized)]
         public IList<string> ResumeTriggers(GroupMatcher<TriggerKey> matcher)
         {
-            Collection.ISet<string> resumedGroups = new Collection.HashSet<string>();
-            Collection.ISet<TriggerKey> keys = GetTriggerKeys(matcher);
+            ISet<string> resumedGroups = new HashSet<string>();
+            ISet<TriggerKey> keys = GetTriggerKeys(matcher);
 
             foreach (TriggerKey triggerKey in keys)
             {
@@ -1196,11 +1191,11 @@ namespace Quartz.Impl.RavenDB
         /// </summary>
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.Synchronized)]
-        public Collection.ISet<string> GetPausedTriggerGroups()
+        public ISet<string> GetPausedTriggerGroups()
         {
             using (var session = DocumentStoreHolder.Store.OpenSession())
             {
-                return new Collection.HashSet<string>(
+                return new HashSet<string>(
                     session.Query<Trigger>()
                         .Where(t => t.State == InternalTriggerState.Paused || t.State == InternalTriggerState.PausedAndBlocked)
                         .Distinct()
@@ -1215,7 +1210,7 @@ namespace Quartz.Impl.RavenDB
         /// </summary>
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.Synchronized)]
-        public Collection.ISet<string> GetPausedJobGroups()
+        public ISet<string> GetPausedJobGroups()
         {
             using (var session = DocumentStoreHolder.Store.OpenSession())
             {
@@ -1228,7 +1223,7 @@ namespace Quartz.Impl.RavenDB
         /// </summary>
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.Synchronized)]
-        public Collection.ISet<string> GetBlockedJobs()
+        public ISet<string> GetBlockedJobs()
         {
             using (var session = DocumentStoreHolder.Store.OpenSession())
             {
@@ -1265,11 +1260,11 @@ namespace Quartz.Impl.RavenDB
         /// </para> 
         /// </summary>
         [MethodImpl(MethodImplOptions.Synchronized)]
-        public Collection.ISet<string> ResumeJobs(GroupMatcher<JobKey> matcher)
+        public ISet<string> ResumeJobs(GroupMatcher<JobKey> matcher)
         {
-            Collection.ISet<string> resumedGroups = new Collection.HashSet<string>();
+            ISet<string> resumedGroups = new HashSet<string>();
 
-            Collection.ISet<JobKey> keys = GetJobKeys(matcher);
+            ISet<JobKey> keys = GetJobKeys(matcher);
 
             using (var session = DocumentStoreHolder.Store.OpenSession())
             {
@@ -1428,7 +1423,7 @@ namespace Quartz.Impl.RavenDB
         public virtual IList<IOperableTrigger> AcquireNextTriggers(DateTimeOffset noLaterThan, int maxCount, TimeSpan timeWindow)
         {
             List<IOperableTrigger> result = new List<IOperableTrigger>();
-            Collection.ISet<JobKey> acquiredJobKeysForNoConcurrentExec = new Collection.HashSet<JobKey>();
+            ISet<JobKey> acquiredJobKeysForNoConcurrentExec = new HashSet<JobKey>();
             DateTimeOffset? firstAcquiredTriggerFireTime = null;
 
             using (var session = DocumentStoreHolder.Store.OpenSession())
@@ -1746,6 +1741,8 @@ namespace Quartz.Impl.RavenDB
                 session.SaveChanges();
             }
         }
+
+        
 
         /// <summary> 
         /// The time span by which a trigger must have missed its

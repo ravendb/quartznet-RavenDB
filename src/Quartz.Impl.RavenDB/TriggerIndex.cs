@@ -1,5 +1,4 @@
-﻿using Raven.Abstractions.Indexing;
-using Raven.Client.Indexes;
+﻿using Raven.Client.Documents.Indexes;
 
 namespace Quartz.Impl.RavenDB
 {
@@ -12,9 +11,9 @@ namespace Quartz.Impl.RavenDB
         /// </summary>
         public override IndexDefinition CreateIndexDefinition()
         {
-            return new IndexDefinition
-            {
-                Map = @"from doc in docs.Triggers
+            var definition =  new IndexDefinition();
+
+            definition.Maps.Add(@"from doc in docs.Triggers
                         select new {
 	                        JobName = doc.JobName,
                             Group = doc.Group,
@@ -23,8 +22,9 @@ namespace Quartz.Impl.RavenDB
                             NextFireTimeUtc = doc.NextFireTimeUtc,
                             Priority = doc.Priority,
                             State = doc.State
-                        }"
-            };
+                        }");
+
+            return definition;
         }
     }
 }
