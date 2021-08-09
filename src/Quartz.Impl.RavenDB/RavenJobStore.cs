@@ -132,7 +132,7 @@ namespace Quartz.Impl.RavenDB
 
                     foreach (var job in queryResultJobs)
                     {
-                        ((List<IOperableTrigger>)recoveringJobTriggers).AddRange(GetTriggersForJob(new JobKey(job.Name, job.Group)));
+                        ((List<IOperableTrigger>)recoveringJobTriggers).AddRange(await GetTriggersForJob(new JobKey(job.Name, job.Group), cancellationToken));
                     }
                 }
 
@@ -188,40 +188,6 @@ namespace Quartz.Impl.RavenDB
             return Convert.ToString(value, CultureInfo.InvariantCulture);
         }
 
-        /// <summary>
-        /// returns true if the given JobGroup is paused
-        /// </summary>
-        /// <param name="groupName"></param>
-        /// <returns></returns>
-        [MethodImpl(MethodImplOptions.Synchronized)]
-        public bool IsJobGroupPaused(string groupName)
-        {
-            using (var session = DocumentStoreHolder.Store.OpenSession())
-            {
-                var sched = session.Load<Scheduler>(InstanceName);
-                return sched.PausedJobGroups.Contains(groupName);
-            }
-        }
-
-
-
-        /// <summary>
-        /// Retrieve the <see cref="IJobDetail" /> for the given
-        /// <see cref="IJob" />.
-        /// </summary>
-        /// <returns>
-        /// The desired <see cref="IJob" />, or null if there is no match.
-        /// </returns>
-        [MethodImpl(MethodImplOptions.Synchronized)]
-        public IJobDetail RetrieveJob(JobKey jobKey)
-        {
-            using (var session = DocumentStoreHolder.Store.OpenSession())
-            {
-                var job = session.Load<Job>(jobKey.Name + "/" + jobKey.Group);
-
-                return job?.Deserialize();
-            }
-        }
 
         /// <summary>
         /// Clear (delete!) all scheduling data - all <see cref="IJob"/>s, <see cref="ITrigger" />s
@@ -256,19 +222,6 @@ namespace Quartz.Impl.RavenDB
             return sched.Calendars;
         }
 
-        /// <summary>
-        /// Get the number of <see cref="IJob" />s that are
-        /// stored in the <see cref="IJobStore" />.
-        /// </summary>
-        /// <returns></returns>
-        [MethodImpl(MethodImplOptions.Synchronized)]
-        public int GetNumberOfJobs()
-        {
-            using (var session = DocumentStoreHolder.Store.OpenSession())
-            {
-                return session.Query<Job>().Count();
-            }
-        }
 
         /// <summary>
         /// Get the number of <see cref="ITrigger" />s that are
@@ -347,116 +300,6 @@ namespace Quartz.Impl.RavenDB
                 }
             }
             return result;
-        }
-
-        /// <summary>
-        /// Get the names of all of the <see cref="IJob" />
-        /// groups.
-        /// <para>
-        /// If there are no known group names, the result should be a zero-length
-        /// array (not <see langword="null" />).
-        /// </para>
-        /// </summary>
-        [MethodImpl(MethodImplOptions.Synchronized)]
-        public IList<string> GetJobGroupNames()
-        {
-            using (var session = DocumentStoreHolder.Store.OpenSession())
-            {
-                return session.Query<Job>()
-                    .Select(j => j.Group)
-                    .Distinct()
-                    .ToList();
-            }
-        }
-
-        /// <summary>
-        /// Get the names of all of the <see cref="ITrigger" />
-        /// groups.
-        /// <para>
-        /// If there are no known group names, the result should be a zero-length
-        /// array (not <see langword="null" />).
-        /// </para>
-        /// </summary>
-        [MethodImpl(MethodImplOptions.Synchronized)]
-        public IList<string> GetTriggerGroupNames()
-        {
-            using (var session = DocumentStoreHolder.Store.OpenSession())
-            {
-                try
-                {
-                    var result = session.Query<Trigger>()
-                        .Select(t => t.Group)
-                        .Distinct()
-                        .ToList();
-                    return result;
-                }
-                catch (ArgumentNullException)
-                {
-                    return new List<string>();
-                }
-            }
-        }
-
-        /// <summary>
-        /// Get all of the Triggers that are associated to the given Job.
-        /// </summary>
-        /// <remarks>
-        /// If there are no matches, a zero-length array should be returned.
-        /// </remarks>
-        [MethodImpl(MethodImplOptions.Synchronized)]
-        public IList<IOperableTrigger> GetTriggersForJob(JobKey jobKey)
-        {
-            using (var session = DocumentStoreHolder.Store.OpenSession())
-            {
-                try
-                {
-                    var result = session
-                        .Query<Trigger>()
-                        .Where(t => Equals(t.JobName, jobKey.Name) && Equals(t.Group, jobKey.Group))
-                        .ToList()
-                        .Select(trigger => trigger.Deserialize()).ToList();
-                    return result;
-                }
-                catch(NullReferenceException)
-                {
-                    return new List<IOperableTrigger>();
-                }
-            }
-        }
-
-        /// <summary>
-        /// Get the current state of the identified <see cref="ITrigger" />.
-        /// </summary>
-        /// <seealso cref="TriggerState" />
-        [MethodImpl(MethodImplOptions.Synchronized)]
-        public TriggerState GetTriggerState(TriggerKey triggerKey)
-        {
-            Trigger trigger;
-            using (var session = DocumentStoreHolder.Store.OpenSession())
-            {
-                trigger = session.Load<Trigger>(triggerKey.GetDatabaseId());
-            }
-
-            if (trigger == null)
-            {
-                return TriggerState.None;
-            }
-
-            switch (trigger.State)
-            {
-                case InternalTriggerState.Complete:
-                    return TriggerState.Complete;
-                case InternalTriggerState.Paused:
-                    return TriggerState.Paused;
-                case InternalTriggerState.PausedAndBlocked:
-                    return TriggerState.Paused;
-                case InternalTriggerState.Blocked:
-                    return TriggerState.Blocked;
-                case InternalTriggerState.Error:
-                    return TriggerState.Error;
-                default:
-                    return TriggerState.Normal;
-            }
         }
 
 

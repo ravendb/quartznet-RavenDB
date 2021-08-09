@@ -68,9 +68,11 @@ namespace Quartz.Impl.RavenDB
             await StoreTrigger(newTrigger, true);
         }
 
-        public Task<bool> IsJobGroupPaused(string groupName, CancellationToken cancellationToken = default)
+        public async Task<bool> IsJobGroupPaused(string groupName, CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException();
+            using var session = DocumentStoreHolder.Store.OpenAsyncSession();
+            var sched = await session.LoadAsync<Scheduler>(InstanceName, cancellationToken);
+            return sched.PausedJobGroups.Contains(groupName);
         }
 
         public async Task<bool> IsTriggerGroupPaused(string groupName, CancellationToken cancellationToken = default)
@@ -161,9 +163,12 @@ namespace Quartz.Impl.RavenDB
             return result;
         }
 
-        public Task<IJobDetail> RetrieveJob(JobKey jobKey, CancellationToken cancellationToken = default)
+        public async Task<IJobDetail> RetrieveJob(JobKey jobKey, CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException();
+            using var session = DocumentStoreHolder.Store.OpenAsyncSession();
+            var job = await session.LoadAsync<Job>(jobKey.Name + "/" + jobKey.Group, cancellationToken);
+
+            return job?.Deserialize();
         }
 
         public async Task StoreTrigger(IOperableTrigger newTrigger, bool replaceExisting, CancellationToken cancellationToken = default)
@@ -389,9 +394,11 @@ namespace Quartz.Impl.RavenDB
             return callCollection.ContainsKey(calName) ? callCollection[calName] : null;
         }
 
-        public Task<int> GetNumberOfJobs(CancellationToken cancellationToken = default)
+        public async Task<int> GetNumberOfJobs(CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException();
+            using var session = DocumentStoreHolder.Store.OpenAsyncSession();
+
+            return await session.Query<Job>().CountAsync(cancellationToken);
         }
 
         public Task<int> GetNumberOfTriggers(CancellationToken cancellationToken = default)
@@ -414,14 +421,30 @@ namespace Quartz.Impl.RavenDB
             throw new NotImplementedException();
         }
 
-        public Task<IReadOnlyCollection<string>> GetJobGroupNames(CancellationToken cancellationToken = default)
+        public async Task<IReadOnlyCollection<string>> GetJobGroupNames(CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException();
+            using var session = DocumentStoreHolder.Store.OpenAsyncSession();
+            return await session.Query<Job>()
+                .Select(j => j.Group)
+                .Distinct()
+                .ToListAsync(cancellationToken);
         }
 
-        public Task<IReadOnlyCollection<string>> GetTriggerGroupNames(CancellationToken cancellationToken = default)
+        public async Task<IReadOnlyCollection<string>> GetTriggerGroupNames(CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException();
+            using var session = DocumentStoreHolder.Store.OpenAsyncSession();
+            try
+            {
+                var result = await session.Query<Trigger>()
+                    .Select(t => t.Group)
+                    .Distinct()
+                    .ToListAsync(cancellationToken);
+                return result;
+            }
+            catch (ArgumentNullException)
+            {
+                return new List<string>();
+            }
         }
 
         public async Task<IReadOnlyCollection<string>> GetCalendarNames(CancellationToken cancellationToken = default)
@@ -429,14 +452,53 @@ namespace Quartz.Impl.RavenDB
             return (await RetrieveCalendarCollection(cancellationToken)).Keys.ToList();
         }
 
-        public Task<IReadOnlyCollection<IOperableTrigger>> GetTriggersForJob(JobKey jobKey, CancellationToken cancellationToken = default)
+        public async Task<IReadOnlyCollection<IOperableTrigger>> GetTriggersForJob(JobKey jobKey, CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException();
+            using var session = DocumentStoreHolder.Store.OpenAsyncSession();
+            try
+            {
+                var result = (await session
+                    .Query<Trigger>()
+                    .Where(t => Equals(t.JobName, jobKey.Name) && Equals(t.Group, jobKey.Group))
+                    .ToListAsync(cancellationToken))
+                    .Select(trigger => trigger.Deserialize()).ToList();
+                return result;
+            }
+            catch (NullReferenceException)
+            {
+                return new List<IOperableTrigger>();
+            }
         }
 
-        public Task<TriggerState> GetTriggerState(TriggerKey triggerKey, CancellationToken cancellationToken = default)
+        public async Task<TriggerState> GetTriggerState(TriggerKey triggerKey, CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException();
+            Trigger trigger;
+
+            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+            {
+                trigger = await session.LoadAsync<Trigger>(triggerKey.GetDatabaseId(), cancellationToken);
+            }
+
+            if (trigger == null)
+            {
+                return TriggerState.None;
+            }
+
+            switch (trigger.State)
+            {
+                case InternalTriggerState.Complete:
+                    return TriggerState.Complete;
+                case InternalTriggerState.Paused:
+                    return TriggerState.Paused;
+                case InternalTriggerState.PausedAndBlocked:
+                    return TriggerState.Paused;
+                case InternalTriggerState.Blocked:
+                    return TriggerState.Blocked;
+                case InternalTriggerState.Error:
+                    return TriggerState.Error;
+                default:
+                    return TriggerState.Normal;
+            }
         }
 
         public async Task PauseTrigger(TriggerKey triggerKey, CancellationToken cancellationToken = default)
@@ -598,7 +660,7 @@ namespace Quartz.Impl.RavenDB
 
             foreach (JobKey key in keys)
             {
-                var triggers = GetTriggersForJob(key);
+                var triggers = await GetTriggersForJob(key, cancellationToken);
                 foreach (IOperableTrigger trigger in triggers)
                 {
                     await ResumeTrigger(trigger.Key, cancellationToken);
@@ -625,7 +687,7 @@ namespace Quartz.Impl.RavenDB
 
             sched.PausedJobGroups.Clear();
 
-            var triggerGroupNames = GetTriggerGroupNames();
+            var triggerGroupNames = await GetTriggerGroupNames(cancellationToken);
 
             foreach (var groupName in triggerGroupNames)
             {
