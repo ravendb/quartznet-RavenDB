@@ -108,8 +108,7 @@ namespace Quartz.Impl.RavenDB
                 // Storing all triggers for the current job
                 foreach (var trig in pair.Value)
                 {
-                    var operTrig = trig as IOperableTrigger;
-                    if (operTrig == null)
+                    if (!(trig is IOperableTrigger operTrig))
                     {
                         continue;
                     }
@@ -238,7 +237,7 @@ namespace Quartz.Impl.RavenDB
             var result = true;
             foreach (var key in triggerKeys)
             {
-                result &= await RemoveTrigger(key);
+                result &= await RemoveTrigger(key, cancellationToken);
             }
             return result;
         }
@@ -279,7 +278,7 @@ namespace Quartz.Impl.RavenDB
             bool answer;
             using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
             {
-                var sched = await session.LoadAsync<Scheduler>(InstanceName);
+                var sched = await session.LoadAsync<Scheduler>(InstanceName, cancellationToken);
                 if (sched == null) return false;
                 try
                 {
@@ -305,7 +304,7 @@ namespace Quartz.Impl.RavenDB
         {
             using var session = DocumentStoreHolder.Store.OpenAsyncSession();
 
-            return await session.Advanced.ExistsAsync(triggerKey.GetDatabaseId());
+            return await session.Advanced.ExistsAsync(triggerKey.GetDatabaseId(), cancellationToken);
         }
 
         public Task ClearAllSchedulingData(CancellationToken cancellationToken = default)
@@ -347,7 +346,7 @@ namespace Quartz.Impl.RavenDB
 
             if (triggersKeysToUpdate.Count == 0)
             {
-                await session.SaveChangesAsync();
+                await session.SaveChangesAsync(cancellationToken);
                 return;
             }
 
@@ -359,7 +358,7 @@ namespace Quartz.Impl.RavenDB
                 triggerToUpdate.UpdateFireTimes(trigger);
             }
 
-            await session.SaveChangesAsync();
+            await session.SaveChangesAsync(cancellationToken);
         }
 
         public async Task<bool> RemoveCalendar(string calName, CancellationToken cancellationToken = default)
@@ -464,7 +463,7 @@ namespace Quartz.Impl.RavenDB
 
             trig.State = trig.State == InternalTriggerState.Blocked ? InternalTriggerState.PausedAndBlocked : InternalTriggerState.Paused;
 
-            await session.SaveChangesAsync();
+            await session.SaveChangesAsync(cancellationToken);
         }
 
         public async Task<IReadOnlyCollection<string>> PauseTriggers(GroupMatcher<TriggerKey> matcher, CancellationToken cancellationToken = default)
