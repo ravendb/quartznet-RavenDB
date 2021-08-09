@@ -6,9 +6,9 @@
     <Product>Quartz.Impl.RavenDB</Product>
     <Description>RavenDB JobStore support for Quartz.NET scheduler.</Description>
     <Copyright>Copyright ©  2016</Copyright>
-    <Version>1.0.5</Version>
+    <Version>2.0.0</Version>
     <OutputPath>bin\$(Configuration)\</OutputPath>
-    <Authors>Iftah Ben Zaken</Authors>
+    <Authors>Iftah Ben Zaken, Benjamin Höglinger-Stelzer</Authors>
     <PackageId>Quartz.Impl.RavenDB</PackageId>
     <PackageLicenseUrl>http://www.apache.org/licenses/LICENSE-2.0.html</PackageLicenseUrl>
     <PackageProjectUrl>https://github.com/ravendb/quartznet-RavenDB</PackageProjectUrl>

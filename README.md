@@ -6,9 +6,18 @@ JobStore implementation for Quartz.NET scheduler using RavenDB.
 
 [Quartz.NET](https://github.com/quartznet/quartznet) is a full-featured, open source job scheduling system that can be used from smallest apps to large scale enterprise systems.
 
-[Quartz.NET on RavenDB](https://github.com/ravendb/quartznet-RavenDB) is a new provider written for Quartz.NET which lets us use the  [RavenDB](https://ravendb.net/features) NoSQL database as the persistent Job Store for scheduling data (instead of the SQL solutions that are built-in Quartz.NET).
+[Quartz.NET on RavenDB](https://github.com/ravendb/quartznet-RavenDB) is a new provider written for Quartz.NET which lets us use the [RavenDB](https://ravendb.net/features) NoSQL database as the persistent Job Store for scheduling data (instead of the SQL solutions that are built-in Quartz.NET).
+
+###### To-Do
+
+- Migrate to Quartz.NET 3.x
+- Migrate to RavenDB 5.x
+- Micrate from `Common.Logging` to `Microsoft.Extensions.Logging`
+- Adopt [TAP model](https://docs.microsoft.com/en-us/dotnet/csharp/programming-guide/concepts/async/task-asynchronous-programming-model) everywhere
+- Migrate Test and Sample projects to SDK format
 
 ###### Release Notes
+
 * 1.0.6 - Fixed parsing of Connection String when ApiKey is missing
 * 1.0.5 - Fixed authentication problem when using ApiKey in the connection string	
 * 1.0.4 - Fixed misfire handling bug causing jobs not to fire. 
