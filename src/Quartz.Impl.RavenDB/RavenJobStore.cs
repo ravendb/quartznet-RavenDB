@@ -85,7 +85,7 @@ namespace Quartz.Impl.RavenDB
         public async Task SetSchedulerState(SchedulerState state, CancellationToken cancellationToken)
         {
             using var session = DocumentStoreHolder.Store.OpenAsyncSession();
-            var sched = await session.LoadAsync<Scheduler>(InstanceName);
+            var sched = await session.LoadAsync<Scheduler>(InstanceName, cancellationToken);
             sched.State = state;
             await session.SaveChangesAsync(cancellationToken);
         }
