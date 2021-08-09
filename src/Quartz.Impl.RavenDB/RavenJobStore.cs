@@ -13,6 +13,9 @@ using Quartz.Core;
 using Quartz.Impl.Matchers;
 using Quartz.Spi;
 using Quartz.Simpl;
+using System.Threading.Tasks;
+using Raven.Client.Documents.Linq;
+using Raven.Client.Documents.Queries;
 
 namespace Quartz.Impl.RavenDB
 {
@@ -79,101 +82,12 @@ namespace Quartz.Impl.RavenDB
             new JobIndex().Execute(DocumentStoreHolder.Store);
         }
 
-        /// <summary>
-        /// Called by the QuartzScheduler before the <see cref="IJobStore" /> is
-        /// used, in order to give it a chance to Initialize.
-        /// </summary>
-        [MethodImpl(MethodImplOptions.Synchronized)]
-        public void Initialize(ITypeLoadHelper loadHelper, ISchedulerSignaler s)
+        public async Task SetSchedulerState(SchedulerState state, CancellationToken cancellationToken)
         {
-            signaler = s;
-        }
-
-        /// <summary>
-        /// Sets the schedulers's state
-        /// </summary>
-        [MethodImpl(MethodImplOptions.Synchronized)]
-        public void SetSchedulerState(string state)
-        {
-            using (var session = DocumentStoreHolder.Store.OpenSession())
-            {
-                var sched = session.Load<Scheduler>(InstanceName);
-                sched.State = state;
-                session.SaveChanges();
-            }
-        }
-
-        /// <summary>
-        /// Called by the QuartzScheduler to inform the <see cref="IJobStore" /> that
-        /// the scheduler has started.
-        /// </summary>
-        [MethodImpl(MethodImplOptions.Synchronized)]
-        public void SchedulerStarted()
-        {
-            var cmds = DocumentStoreHolder.Store.DatabaseCommands;
-            var docMetaData = cmds.Head(InstanceName);
-            if (docMetaData != null)
-            {
-                // Scheduler with same instance name already exists, recover persistent data
-                try
-                {
-                    RecoverSchedulerData();
-                }
-                catch (SchedulerException se)
-                {
-                    throw new SchedulerConfigException("Failure occurred during job recovery.", se);
-                }
-                return;
-            }
-
-            // If schefuler doesn't exist create new empty scheduler and store it
-            var schedToStore = new Scheduler
-            {
-                InstanceName = InstanceName,
-                LastCheckinTime = DateTimeOffset.MinValue,
-                CheckinInterval = DateTimeOffset.MinValue,
-                Calendars = new Dictionary<string, ICalendar>(),
-                PausedJobGroups = new Collection.HashSet<string>(),
-                BlockedJobs = new Collection.HashSet<string>(),
-                State = "Started"
-            };
-
-            using (var session = DocumentStoreHolder.Store.OpenSession())
-            {
-                session.Store(schedToStore, InstanceName);
-                session.SaveChanges();
-            }            
-        }
-
-        /// <summary>
-        /// Called by the QuartzScheduler to inform the JobStore that
-        /// the scheduler has been paused.
-        /// </summary>
-        [MethodImpl(MethodImplOptions.Synchronized)]
-        public void SchedulerPaused()
-        {
-            SetSchedulerState("Paused");
-        }
-
-        /// <summary>
-        /// Called by the QuartzScheduler to inform the JobStore that
-        /// the scheduler has resumed after being paused.
-        /// </summary>
-        [MethodImpl(MethodImplOptions.Synchronized)]
-        public void SchedulerResumed()
-        {
-            SetSchedulerState("Resumed");
-        }
-
-        /// <summary>
-        /// Called by the QuartzScheduler to inform the <see cref="IJobStore" /> that
-        /// it should free up all of it's resources because the scheduler is
-        /// shutting down.
-        /// </summary>
-        [MethodImpl(MethodImplOptions.Synchronized)]
-        public void Shutdown()
-        {
-            SetSchedulerState("Shutdown");
+            using var session = DocumentStoreHolder.Store.OpenAsyncSession();
+            var sched = await session.LoadAsync<Scheduler>(InstanceName);
+            sched.State = state;
+            await session.SaveChangesAsync(cancellationToken);
         }
 
         /// <summary>
@@ -213,7 +127,7 @@ namespace Quartz.Impl.RavenDB
 
                     foreach (var job in queryResultJobs)
                     {
-                        recoveringJobTriggers.AddRange(GetTriggersForJob(new JobKey(job.Name, job.Group)));
+                        ((List<IOperableTrigger>)recoveringJobTriggers).AddRange(GetTriggersForJob(new JobKey(job.Name, job.Group)));
                     }
                 }
 
@@ -247,9 +161,8 @@ namespace Quartz.Impl.RavenDB
 
                 using (var session = DocumentStoreHolder.Store.OpenSession())
                 {
-
                     var schedToUpdate = session.Load<Scheduler>(InstanceName);
-                    schedToUpdate.State = "Started";
+                    schedToUpdate.State = SchedulerState.Started;
                     session.SaveChanges();
                 }
             }
@@ -399,10 +312,7 @@ namespace Quartz.Impl.RavenDB
                     return false;
                 }
 
-                session.Advanced.Defer(new DeleteCommandData
-                {
-                    Key = jobKey.Name + "/" + jobKey.Group
-                });
+                session.Delete(jobKey.Name + "/" + jobKey.Group);
                 session.SaveChanges();
             }
             return true;
@@ -513,10 +423,7 @@ namespace Quartz.Impl.RavenDB
                 var job = RetrieveJob(new JobKey(trigger.JobName, trigger.Group));
 
                 // Delete trigger
-                session.Advanced.Defer(new DeleteCommandData
-                {
-                    Key = triggerKey.Name + "/" + triggerKey.Group
-                });
+                session.Delete(triggerKey.Name + "/" + triggerKey.Group);
                 session.SaveChanges();
 
                 // Remove the trigger's job if it is not associated with any other triggers
@@ -633,9 +540,9 @@ namespace Quartz.Impl.RavenDB
         [MethodImpl(MethodImplOptions.Synchronized)]
         public bool CheckExists(JobKey jobKey)
         {
-            var cmds = DocumentStoreHolder.Store.DatabaseCommands;
-            var docMetaData = cmds.Head(jobKey.Name + "/" + jobKey.Group);
-            return docMetaData != null;
+            using var session = DocumentStoreHolder.Store.OpenSession();
+
+            return session.Advanced.Exists(jobKey.Name + "/" + jobKey.Group);
         }
 
         /// <summary>
@@ -649,9 +556,9 @@ namespace Quartz.Impl.RavenDB
         [MethodImpl(MethodImplOptions.Synchronized)]
         public bool CheckExists(TriggerKey triggerKey)
         {
-            var cmds = DocumentStoreHolder.Store.DatabaseCommands;
-            var docMetaData = cmds.Head(triggerKey.Name + "/" + triggerKey.Group);
-            return docMetaData != null;
+            using var session = DocumentStoreHolder.Store.OpenSession();
+
+            return session.Advanced.Exists(triggerKey.Name + "/" + triggerKey.Group);
         }
 
         /// <summary>

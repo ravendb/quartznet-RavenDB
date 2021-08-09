@@ -11,27 +11,51 @@ namespace Quartz.Impl.RavenDB
     {
         public Task Initialize(ITypeLoadHelper loadHelper, ISchedulerSignaler signaler, CancellationToken cancellationToken = default)
         {
+            this.signaler = signaler;
+
+            return Task.CompletedTask;
+        }
+
+        public async Task SchedulerStarted(CancellationToken cancellationToken = default)
+        {
+            using var session = DocumentStoreHolder.Store.OpenAsyncSession();
+
+            var exists = await session.Advanced.ExistsAsync(InstanceName, cancellationToken);
+
+            if (!exists)
+            {
+                var scheduler = new Scheduler() { InstanceName = InstanceName };
+                await session.StoreAsync(scheduler, InstanceName, cancellationToken);
+                await session.SaveChangesAsync(cancellationToken);
+                return;
+            }
+
+            // Scheduler with same instance name already exists, recover persistent data
+            try
+            {
+                RecoverSchedulerData();
+            }
+            catch (SchedulerException se)
+            {
+                throw new SchedulerConfigException("Failure occurred during job recovery.", se);
+            }
+
             throw new NotImplementedException();
         }
 
-        public Task SchedulerStarted(CancellationToken cancellationToken = default)
+        public async Task SchedulerPaused(CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException();
+            await SetSchedulerState(SchedulerState.Paused, cancellationToken);
         }
 
-        public Task SchedulerPaused(CancellationToken cancellationToken = default)
+        public async Task SchedulerResumed(CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException();
+            await SetSchedulerState(SchedulerState.Resumed, cancellationToken);
         }
 
-        public Task SchedulerResumed(CancellationToken cancellationToken = default)
+        public async Task Shutdown(CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException();
-        }
-
-        public Task Shutdown(CancellationToken cancellationToken = default)
-        {
-            throw new NotImplementedException();
+            await SetSchedulerState(SchedulerState.Shutdown, cancellationToken);
         }
 
         public Task StoreJobAndTrigger(IJobDetail newJob, IOperableTrigger newTrigger, CancellationToken cancellationToken = default)
