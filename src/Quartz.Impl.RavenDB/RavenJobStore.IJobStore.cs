@@ -299,11 +299,6 @@ namespace Quartz.Impl.RavenDB
 
         public async Task<IOperableTrigger> RetrieveTrigger(TriggerKey triggerKey, CancellationToken cancellationToken = default)
         {
-            if (!await CheckExists(triggerKey, cancellationToken))
-            {
-                return null;
-            }
-
             using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
             {
                 var trigger = await session.LoadAsync<Trigger>(triggerKey.GetDatabaseId(), cancellationToken);
@@ -471,6 +466,7 @@ namespace Quartz.Impl.RavenDB
                     }
                 }
             }
+
             return result;
         }
 
