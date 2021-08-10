@@ -202,16 +202,26 @@ namespace Quartz.Impl.RavenDB
 
                 var trigger = new Trigger(newTrigger, InstanceName);
 
+                var isTriggerGroupPaused = await session
+                    .Query<Trigger>()
+                    .Include(t => t.Scheduler)
+                        .Where(t => Equals(t.Group, newTrigger.Key.Group) && (t.State == InternalTriggerState.Paused || t.State == InternalTriggerState.PausedAndBlocked))
+                        .AnyAsync(cancellationToken);
+
+                var scheduler = await session.LoadAsync<Scheduler>(InstanceName, cancellationToken);
+
+                var isJobGroupPaused = scheduler.PausedJobGroups.Contains(newTrigger.JobKey.Group);
+
                 // make sure trigger group is not paused and that job is not blocked
-                if ((await GetPausedTriggerGroups(cancellationToken)).Contains(newTrigger.Key.Group) || (await GetPausedJobGroups(cancellationToken)).Contains(newTrigger.JobKey.Group))
+                if (isTriggerGroupPaused || isJobGroupPaused)
                 {
                     trigger.State = InternalTriggerState.Paused;
-                    if ((await GetBlockedJobs(cancellationToken)).Contains(newTrigger.GetJobDatabaseId()))
+                    if (scheduler.BlockedJobs.Contains(newTrigger.GetJobDatabaseId()))
                     {
                         trigger.State = InternalTriggerState.PausedAndBlocked;
                     }
                 }
-                else if ((await GetBlockedJobs(cancellationToken)).Contains(newTrigger.GetJobDatabaseId()))
+                else if (scheduler.BlockedJobs.Contains(newTrigger.GetJobDatabaseId()))
                 {
                     trigger.State = InternalTriggerState.Blocked;
                 }
@@ -241,10 +251,10 @@ namespace Quartz.Impl.RavenDB
                 session.Delete(triggerKey.GetDatabaseId());
 
                 // Check for more triggers            
-                var hasMoreTriggers = (await session
+                var hasMoreTriggers = await session
                         .Query<Trigger>()
                         .Where(t => Equals(t.JobName, job.Key.Name) && Equals(t.Group, job.Key.Group) && !Equals(t.Key, trigger.Key))
-                        .CountAsync(cancellationToken)) > 0;
+                        .AnyAsync(cancellationToken);
 
                 // Remove the trigger's job if it is not associated with any other triggers
                 if (!hasMoreTriggers && !job.Durable)

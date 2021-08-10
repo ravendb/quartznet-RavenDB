@@ -49,7 +49,7 @@ namespace Examples
                     .WithIdentity("CheckAliveJob", "Office")
                     .Build();
 
-                IJobDetail visitJob = JobBuilder.Create<CheckAlive>()
+                IJobDetail visitJob = JobBuilder.Create<Visit>()
                     .WithIdentity("VisitJob", "Office")
                     .Build();
 
@@ -84,9 +84,9 @@ namespace Examples
                     .Build();
 
 
-                scheduler.ScheduleJob(checkAliveJob, checkAliveTrigger);
-                scheduler.ScheduleJob(emptyFridgeJob, emptyFridgeTrigger);
-                scheduler.ScheduleJob(turnOffLightsJob, turnOffLightsTrigger);
+                //scheduler.ScheduleJob(checkAliveJob, checkAliveTrigger);
+                //scheduler.ScheduleJob(emptyFridgeJob, emptyFridgeTrigger);
+                //scheduler.ScheduleJob(turnOffLightsJob, turnOffLightsTrigger);
                 scheduler.ScheduleJob(visitJob, visitTrigger);
 
                 // some sleep to show what's happening
@@ -130,6 +130,16 @@ namespace Examples
         Task IJob.Execute(IJobExecutionContext context)
         {
             Console.WriteLine("Verifying site is up...");
+            return Task.CompletedTask;
+        }
+    }
+
+    [PersistJobDataAfterExecution]
+    public class Visit : IJob
+    {
+        Task IJob.Execute(IJobExecutionContext context)
+        {
+            Console.WriteLine("Visiting the office, once :)");
             return Task.CompletedTask;
         }
     }
