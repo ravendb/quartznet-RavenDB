@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Specialized;
 using System.Threading;
+using System.Threading.Tasks;
 using Quartz;
 using Quartz.Impl;
 
@@ -32,7 +33,7 @@ namespace Examples
             {
 
                 ISchedulerFactory sf = new StdSchedulerFactory(properties);
-                IScheduler scheduler = sf.GetScheduler();
+                IScheduler scheduler = sf.GetScheduler().Result;
                 scheduler.Start();
 
                 IJobDetail emptyFridgeJob = JobBuilder.Create<EmptyFridge>()
@@ -95,30 +96,30 @@ namespace Examples
     [PersistJobDataAfterExecution]
     public class EmptyFridge : IJob
     {
-        public void Execute(IJobExecutionContext context)
+        Task IJob.Execute(IJobExecutionContext context)
         {
             Console.WriteLine("Emptying the fridge...");
+            return Task.CompletedTask;
         }
-
     }
 
     [PersistJobDataAfterExecution]
     public class TurnOffLights : IJob
     {
-        public void Execute(IJobExecutionContext context)
+        Task IJob.Execute(IJobExecutionContext context)
         {
             Console.WriteLine("Turning lights off...");
+            return Task.CompletedTask;
         }
-
     }
 
     [PersistJobDataAfterExecution]
     public class CheckAlive : IJob
     {
-        public void Execute(IJobExecutionContext context)
+        Task IJob.Execute(IJobExecutionContext context)
         {
             Console.WriteLine("Verifying site is up...");
+            return Task.CompletedTask;
         }
-
     }
 }
