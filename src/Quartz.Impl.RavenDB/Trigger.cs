@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
-
+using Newtonsoft.Json;
+using Quartz.Impl.RavenDB.Util;
 using Quartz.Impl.Triggers;
 using Quartz.Simpl;
 using Quartz.Spi;
@@ -64,12 +65,21 @@ namespace Quartz.Impl.RavenDB
         public class DailyTimeOptions
         {
             public int RepeatCount { get; set; }
+
             public IntervalUnit RepeatIntervalUnit { get; set; }
+            
             public int RepeatInterval { get; set; }
+
+            [JsonConverter(typeof(TimeOfDayConverter))]
             public TimeOfDay StartTimeOfDay { get; set; }
+
+            [JsonConverter(typeof(TimeOfDayConverter))]
             public TimeOfDay EndTimeOfDay { get; set; }
+            
             public IReadOnlyCollection<DayOfWeek> DaysOfWeek { get; set; }
+            
             public int TimesTriggered { get; set; }
+            
             public string TimeZoneId { get; set; }
 
         }

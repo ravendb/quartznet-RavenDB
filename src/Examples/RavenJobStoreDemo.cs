@@ -27,6 +27,7 @@ namespace Examples
                 ["quartz.threadPool.threadPriority"] = "Normal",
                 // Setting RavenDB as the persisted JobStore
                 ["quartz.jobStore.type"] = "Quartz.Impl.RavenDB.RavenJobStore, Quartz.Impl.RavenDB",
+                ["quartz.serializer.type"] = "json",
             };
 
             try
@@ -74,9 +75,9 @@ namespace Examples
                     .Build();
 
 
-                scheduler.ScheduleJob(checkAliveJob, checkAliveTrigger);
-                scheduler.ScheduleJob(emptyFridgeJob, emptyFridgeTrigger);
-                scheduler.ScheduleJob(turnOffLightsJob, turnOffLightsTrigger);
+                //scheduler.ScheduleJob(checkAliveJob, checkAliveTrigger);
+                //scheduler.ScheduleJob(emptyFridgeJob, emptyFridgeTrigger);
+                //scheduler.ScheduleJob(turnOffLightsJob, turnOffLightsTrigger);
 
                 // some sleep to show what's happening
                 Thread.Sleep(TimeSpan.FromSeconds(600));

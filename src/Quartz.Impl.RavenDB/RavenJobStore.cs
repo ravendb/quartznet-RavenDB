@@ -107,8 +107,10 @@ namespace Quartz.Impl.RavenDB
                 // update inconsistent states
                 using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
                 {
-                    var queryResult = session.Query<Trigger>()
-                        .Where(t => (t.Scheduler == InstanceName) && (t.State == InternalTriggerState.Acquired || t.State == InternalTriggerState.Blocked));
+                    var queryResult = await session
+                        .Query<Trigger>()
+                        .Where(t => (t.Scheduler == InstanceName) && (t.State == InternalTriggerState.Acquired || t.State == InternalTriggerState.Blocked))
+                        .ToListAsync(cancellationToken);
                     foreach (var trigger in queryResult)
                     {
                         var triggerToUpdate = await session.LoadAsync<Trigger>(trigger.Key, cancellationToken);
@@ -150,12 +152,14 @@ namespace Quartz.Impl.RavenDB
 
                 // remove lingering 'complete' triggers...
                 Log.Info("Removing 'complete' triggers...");
-                IRavenQueryable<Trigger> triggersInStateComplete;
+                IList<Trigger> triggersInStateComplete;
 
-                using (var session = DocumentStoreHolder.Store.OpenSession())
+                using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
                 {
-                    triggersInStateComplete = session.Query<Trigger>()
-                        .Where(t => (t.Scheduler == InstanceName) && (t.State == InternalTriggerState.Complete));
+                    triggersInStateComplete = await session
+                        .Query<Trigger>()
+                        .Where(t => (t.Scheduler == InstanceName) && (t.State == InternalTriggerState.Complete))
+                        .ToListAsync(cancellationToken);
                 }
 
                 foreach (var trigger in triggersInStateComplete)
@@ -163,11 +167,11 @@ namespace Quartz.Impl.RavenDB
                     await RemoveTrigger(new TriggerKey(trigger.Name, trigger.Group), cancellationToken);
                 }
 
-                using (var session = DocumentStoreHolder.Store.OpenSession())
+                using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
                 {
-                    var schedToUpdate = session.Load<Scheduler>(InstanceName);
+                    var schedToUpdate = await session.LoadAsync<Scheduler>(InstanceName, cancellationToken);
                     schedToUpdate.State = SchedulerState.Started;
-                    session.SaveChanges();
+                    await session.SaveChangesAsync(cancellationToken);
                 }
             }
             catch (Exception e)
