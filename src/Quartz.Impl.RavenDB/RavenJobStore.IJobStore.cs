@@ -580,11 +580,6 @@ namespace Quartz.Impl.RavenDB
 
         public async Task PauseTrigger(TriggerKey triggerKey, CancellationToken cancellationToken = default)
         {
-            if (!await CheckExists(triggerKey, cancellationToken))
-            {
-                return;
-            }
-
             using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
             {
                 var trig = await session.LoadAsync<Trigger>(triggerKey.GetDatabaseId(), cancellationToken);
