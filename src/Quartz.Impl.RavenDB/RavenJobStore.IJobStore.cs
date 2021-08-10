@@ -24,26 +24,27 @@ namespace Quartz.Impl.RavenDB
 
         public async Task SchedulerStarted(CancellationToken cancellationToken = default)
         {
-            using var session = DocumentStoreHolder.Store.OpenAsyncSession();
-
-            var exists = await session.Advanced.ExistsAsync(InstanceName, cancellationToken);
-
-            if (!exists)
+            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
             {
-                var scheduler = new Scheduler() { InstanceName = InstanceName };
-                await session.StoreAsync(scheduler, InstanceName, cancellationToken);
-                await session.SaveChangesAsync(cancellationToken);
-                return;
-            }
+                var exists = await session.Advanced.ExistsAsync(InstanceName, cancellationToken);
 
-            // Scheduler with same instance name already exists, recover persistent data
-            try
-            {
-                await RecoverSchedulerData(cancellationToken);
-            }
-            catch (SchedulerException se)
-            {
-                throw new SchedulerConfigException("Failure occurred during job recovery.", se);
+                if (!exists)
+                {
+                    var scheduler = new Scheduler() { InstanceName = InstanceName };
+                    await session.StoreAsync(scheduler, InstanceName, cancellationToken);
+                    await session.SaveChangesAsync(cancellationToken);
+                    return;
+                }
+
+                // Scheduler with same instance name already exists, recover persistent data
+                try
+                {
+                    await RecoverSchedulerData(cancellationToken);
+                }
+                catch (SchedulerException se)
+                {
+                    throw new SchedulerConfigException("Failure occurred during job recovery.", se);
+                }
             }
         }
 
@@ -70,9 +71,11 @@ namespace Quartz.Impl.RavenDB
 
         public async Task<bool> IsJobGroupPaused(string groupName, CancellationToken cancellationToken = default)
         {
-            using var session = DocumentStoreHolder.Store.OpenAsyncSession();
-            var sched = await session.LoadAsync<Scheduler>(InstanceName, cancellationToken);
-            return sched.PausedJobGroups.Contains(groupName);
+            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+            {
+                var sched = await session.LoadAsync<Scheduler>(InstanceName, cancellationToken);
+                return sched.PausedJobGroups.Contains(groupName);
+            }
         }
 
         public async Task<bool> IsTriggerGroupPaused(string groupName, CancellationToken cancellationToken = default)
@@ -92,48 +95,50 @@ namespace Quartz.Impl.RavenDB
 
             var job = new Job(newJob, InstanceName);
 
-            using var session = DocumentStoreHolder.Store.OpenAsyncSession();
-            // Store() overwrites if job id already exists
-            await session.StoreAsync(job, job.Key, cancellationToken);
-            await session.SaveChangesAsync(cancellationToken);
+            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+            {
+                // Store() overwrites if job id already exists
+                await session.StoreAsync(job, job.Key, cancellationToken);
+                await session.SaveChangesAsync(cancellationToken);
+            }
         }
 
         public async Task StoreJobsAndTriggers(IReadOnlyDictionary<IJobDetail, IReadOnlyCollection<ITrigger>> triggersAndJobs, bool replace, CancellationToken cancellationToken = default)
         {
-            using var bulkInsert = DocumentStoreHolder.Store.BulkInsert(token: cancellationToken);
-
-            foreach (var pair in triggersAndJobs)
+            using (var bulkInsert = DocumentStoreHolder.Store.BulkInsert(token: cancellationToken))
             {
-                // First store the current job
-                bulkInsert.Store(new Job(pair.Key, InstanceName), pair.Key.Key.Name + "/" + pair.Key.Key.Group);
-
-                // Storing all triggers for the current job
-                foreach (var trig in pair.Value)
+                foreach (var pair in triggersAndJobs)
                 {
-                    if (!(trig is IOperableTrigger operTrig))
-                    {
-                        continue;
-                    }
-                    var trigger = new Trigger(operTrig, InstanceName);
+                    // First store the current job
+                    bulkInsert.Store(new Job(pair.Key, InstanceName), pair.Key.Key.Name + "/" + pair.Key.Key.Group);
 
-                    if ((await GetPausedTriggerGroups()).Contains(operTrig.Key.Group) || (await GetPausedJobGroups(cancellationToken)).Contains(operTrig.JobKey.Group))
+                    // Storing all triggers for the current job
+                    foreach (var trig in pair.Value)
                     {
-                        trigger.State = InternalTriggerState.Paused;
-                        if ((await GetBlockedJobs(cancellationToken)).Contains(operTrig.GetJobDatabaseId()))
+                        if (!(trig is IOperableTrigger operTrig))
                         {
-                            trigger.State = InternalTriggerState.PausedAndBlocked;
+                            continue;
                         }
-                    }
-                    else if ((await GetBlockedJobs(cancellationToken)).Contains(operTrig.GetJobDatabaseId()))
-                    {
-                        trigger.State = InternalTriggerState.Blocked;
-                    }
+                        var trigger = new Trigger(operTrig, InstanceName);
 
-                    bulkInsert.Store(trigger, trigger.Key);
+                        if ((await GetPausedTriggerGroups()).Contains(operTrig.Key.Group) || (await GetPausedJobGroups(cancellationToken)).Contains(operTrig.JobKey.Group))
+                        {
+                            trigger.State = InternalTriggerState.Paused;
+                            if ((await GetBlockedJobs(cancellationToken)).Contains(operTrig.GetJobDatabaseId()))
+                            {
+                                trigger.State = InternalTriggerState.PausedAndBlocked;
+                            }
+                        }
+                        else if ((await GetBlockedJobs(cancellationToken)).Contains(operTrig.GetJobDatabaseId()))
+                        {
+                            trigger.State = InternalTriggerState.Blocked;
+                        }
+
+                        bulkInsert.Store(trigger, trigger.Key);
+                    }
                 }
+                // bulkInsert is disposed - same effect as session.SaveChanges()
             }
-            // bulkInsert is disposed - same effect as session.SaveChanges()
-
         }
 
         public async Task<bool> RemoveJob(JobKey jobKey, CancellationToken cancellationToken = default)
@@ -165,10 +170,12 @@ namespace Quartz.Impl.RavenDB
 
         public async Task<IJobDetail> RetrieveJob(JobKey jobKey, CancellationToken cancellationToken = default)
         {
-            using var session = DocumentStoreHolder.Store.OpenAsyncSession();
-            var job = await session.LoadAsync<Job>(jobKey.Name + "/" + jobKey.Group, cancellationToken);
+            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+            {
+                var job = await session.LoadAsync<Job>(jobKey.Name + "/" + jobKey.Group, cancellationToken);
 
-            return job?.Deserialize();
+                return job?.Deserialize();
+            }
         }
 
         public async Task StoreTrigger(IOperableTrigger newTrigger, bool replaceExisting, CancellationToken cancellationToken = default)
@@ -202,10 +209,12 @@ namespace Quartz.Impl.RavenDB
                 trigger.State = InternalTriggerState.Blocked;
             }
 
-            using var session = DocumentStoreHolder.Store.OpenAsyncSession();
-            // Overwrite if exists
-            await session.StoreAsync(trigger, trigger.Key, cancellationToken);
-            await session.SaveChangesAsync(cancellationToken);
+            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+            {
+                // Overwrite if exists
+                await session.StoreAsync(trigger, trigger.Key, cancellationToken);
+                await session.SaveChangesAsync(cancellationToken);
+            }
         }
 
         public async Task<bool> RemoveTrigger(TriggerKey triggerKey, CancellationToken cancellationToken = default)
@@ -271,11 +280,12 @@ namespace Quartz.Impl.RavenDB
                 return null;
             }
 
-            using var session = DocumentStoreHolder.Store.OpenAsyncSession();
+            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+            {
+                var trigger = await session.LoadAsync<Trigger>(triggerKey.GetDatabaseId(), cancellationToken);
 
-            var trigger = await session.LoadAsync<Trigger>(triggerKey.GetDatabaseId(), cancellationToken);
-
-            return trigger?.Deserialize();
+                return trigger?.Deserialize();
+            }
         }
 
         public async Task<bool> CalendarExists(string calName, CancellationToken cancellationToken = default)
@@ -300,16 +310,18 @@ namespace Quartz.Impl.RavenDB
 
         public async Task<bool> CheckExists(JobKey jobKey, CancellationToken cancellationToken = default)
         {
-            using var session = DocumentStoreHolder.Store.OpenAsyncSession();
-
-            return await session.Advanced.ExistsAsync(jobKey.GetDatabaseId(), cancellationToken);
+            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+            {
+                return await session.Advanced.ExistsAsync(jobKey.GetDatabaseId(), cancellationToken);
+            }
         }
 
         public async Task<bool> CheckExists(TriggerKey triggerKey, CancellationToken cancellationToken = default)
         {
-            using var session = DocumentStoreHolder.Store.OpenAsyncSession();
-
-            return await session.Advanced.ExistsAsync(triggerKey.GetDatabaseId(), cancellationToken);
+            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+            {
+                return await session.Advanced.ExistsAsync(triggerKey.GetDatabaseId(), cancellationToken);
+            }
         }
 
         public Task ClearAllSchedulingData(CancellationToken cancellationToken = default)
@@ -321,49 +333,50 @@ namespace Quartz.Impl.RavenDB
         {
             var calendarCopy = calendar.Clone();
 
-            using var session = DocumentStoreHolder.Store.OpenAsyncSession();
-
-            var sched = await session.LoadAsync<Scheduler>(InstanceName, cancellationToken);
-
-            if (sched?.Calendars is null)
+            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
             {
-                throw new NullReferenceException(string.Format(CultureInfo.InvariantCulture, "Scheduler with instance name '{0}' is null", InstanceName));
-            }
+                var sched = await session.LoadAsync<Scheduler>(InstanceName, cancellationToken);
 
-            if (await CalendarExists(name, cancellationToken) && !replaceExisting)
-            {
-                throw new ObjectAlreadyExistsException(string.Format(CultureInfo.InvariantCulture, "Calendar with name '{0}' already exists.", name));
-            }
+                if (sched?.Calendars is null)
+                {
+                    throw new NullReferenceException(string.Format(CultureInfo.InvariantCulture, "Scheduler with instance name '{0}' is null", InstanceName));
+                }
 
-            // add or replace calendar
-            sched.Calendars[name] = calendarCopy;
+                if (await CalendarExists(name, cancellationToken) && !replaceExisting)
+                {
+                    throw new ObjectAlreadyExistsException(string.Format(CultureInfo.InvariantCulture, "Calendar with name '{0}' already exists.", name));
+                }
 
-            if (!updateTriggers)
-            {
-                return;
-            }
+                // add or replace calendar
+                sched.Calendars[name] = calendarCopy;
 
-            var triggersKeysToUpdate = await session
-                .Query<Trigger>()
-                .Where(t => t.CalendarName == name)
-                .Select(t => t.Key)
-                .ToListAsync(cancellationToken);
+                if (!updateTriggers)
+                {
+                    return;
+                }
 
-            if (triggersKeysToUpdate.Count == 0)
-            {
+                var triggersKeysToUpdate = await session
+                    .Query<Trigger>()
+                    .Where(t => t.CalendarName == name)
+                    .Select(t => t.Key)
+                    .ToListAsync(cancellationToken);
+
+                if (triggersKeysToUpdate.Count == 0)
+                {
+                    await session.SaveChangesAsync(cancellationToken);
+                    return;
+                }
+
+                foreach (var triggerKey in triggersKeysToUpdate)
+                {
+                    var triggerToUpdate = await session.LoadAsync<Trigger>(triggerKey, cancellationToken);
+                    var trigger = triggerToUpdate.Deserialize();
+                    trigger.UpdateWithNewCalendar(calendarCopy, misfireThreshold);
+                    triggerToUpdate.UpdateFireTimes(trigger);
+                }
+
                 await session.SaveChangesAsync(cancellationToken);
-                return;
             }
-
-            foreach (var triggerKey in triggersKeysToUpdate)
-            {
-                var triggerToUpdate = await session.LoadAsync<Trigger>(triggerKey, cancellationToken);
-                var trigger = triggerToUpdate.Deserialize();
-                trigger.UpdateWithNewCalendar(calendarCopy, misfireThreshold);
-                triggerToUpdate.UpdateFireTimes(trigger);
-            }
-
-            await session.SaveChangesAsync(cancellationToken);
         }
 
         public async Task<bool> RemoveCalendar(string calName, CancellationToken cancellationToken = default)
@@ -396,16 +409,18 @@ namespace Quartz.Impl.RavenDB
 
         public async Task<int> GetNumberOfJobs(CancellationToken cancellationToken = default)
         {
-            using var session = DocumentStoreHolder.Store.OpenAsyncSession();
-
-            return await session.Query<Job>().CountAsync(cancellationToken);
+            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+            {
+                return await session.Query<Job>().CountAsync(cancellationToken);
+            }
         }
 
         public async Task<int> GetNumberOfTriggers(CancellationToken cancellationToken = default)
         {
-            using var session = DocumentStoreHolder.Store.OpenAsyncSession();
-
-            return await session.Query<Trigger>().CountAsync(cancellationToken);
+            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+            {
+                return await session.Query<Trigger>().CountAsync(cancellationToken);
+            }
         }
 
         public async Task<int> GetNumberOfCalendars(CancellationToken cancellationToken = default)
@@ -459,27 +474,31 @@ namespace Quartz.Impl.RavenDB
 
         public async Task<IReadOnlyCollection<string>> GetJobGroupNames(CancellationToken cancellationToken = default)
         {
-            using var session = DocumentStoreHolder.Store.OpenAsyncSession();
-            return await session.Query<Job>()
-                .Select(j => j.Group)
-                .Distinct()
-                .ToListAsync(cancellationToken);
+            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+            {
+                return await session.Query<Job>()
+                      .Select(j => j.Group)
+                      .Distinct()
+                      .ToListAsync(cancellationToken);
+            }
         }
 
         public async Task<IReadOnlyCollection<string>> GetTriggerGroupNames(CancellationToken cancellationToken = default)
         {
-            using var session = DocumentStoreHolder.Store.OpenAsyncSession();
-            try
+            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
             {
-                var result = await session.Query<Trigger>()
-                    .Select(t => t.Group)
-                    .Distinct()
-                    .ToListAsync(cancellationToken);
-                return result;
-            }
-            catch (ArgumentNullException)
-            {
-                return new List<string>();
+                try
+                {
+                    var result = await session.Query<Trigger>()
+                        .Select(t => t.Group)
+                        .Distinct()
+                        .ToListAsync(cancellationToken);
+                    return result;
+                }
+                catch (ArgumentNullException)
+                {
+                    return new List<string>();
+                }
             }
         }
 
@@ -490,19 +509,21 @@ namespace Quartz.Impl.RavenDB
 
         public async Task<IReadOnlyCollection<IOperableTrigger>> GetTriggersForJob(JobKey jobKey, CancellationToken cancellationToken = default)
         {
-            using var session = DocumentStoreHolder.Store.OpenAsyncSession();
-            try
+            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
             {
-                var result = (await session
-                    .Query<Trigger>()
-                    .Where(t => Equals(t.JobName, jobKey.Name) && Equals(t.Group, jobKey.Group))
-                    .ToListAsync(cancellationToken))
-                    .Select(trigger => trigger.Deserialize()).ToList();
-                return result;
-            }
-            catch (NullReferenceException)
-            {
-                return new List<IOperableTrigger>();
+                try
+                {
+                    var result = (await session
+                        .Query<Trigger>()
+                        .Where(t => Equals(t.JobName, jobKey.Name) && Equals(t.Group, jobKey.Group))
+                        .ToListAsync(cancellationToken))
+                        .Select(trigger => trigger.Deserialize()).ToList();
+                    return result;
+                }
+                catch (NullReferenceException)
+                {
+                    return new List<IOperableTrigger>();
+                }
             }
         }
 
@@ -544,24 +565,25 @@ namespace Quartz.Impl.RavenDB
                 return;
             }
 
-            using var session = DocumentStoreHolder.Store.OpenAsyncSession();
-
-            var trig = await session.LoadAsync<Trigger>(triggerKey.GetDatabaseId(), cancellationToken);
-
-            // if the trigger doesn't exist or is "complete" pausing it does not make sense...
-            if (trig is null)
+            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
             {
-                return;
+                var trig = await session.LoadAsync<Trigger>(triggerKey.GetDatabaseId(), cancellationToken);
+
+                // if the trigger doesn't exist or is "complete" pausing it does not make sense...
+                if (trig is null)
+                {
+                    return;
+                }
+
+                if (trig.State == InternalTriggerState.Complete)
+                {
+                    return;
+                }
+
+                trig.State = trig.State == InternalTriggerState.Blocked ? InternalTriggerState.PausedAndBlocked : InternalTriggerState.Paused;
+
+                await session.SaveChangesAsync(cancellationToken);
             }
-
-            if (trig.State == InternalTriggerState.Complete)
-            {
-                return;
-            }
-
-            trig.State = trig.State == InternalTriggerState.Blocked ? InternalTriggerState.PausedAndBlocked : InternalTriggerState.Paused;
-
-            await session.SaveChangesAsync(cancellationToken);
         }
 
         public async Task<IReadOnlyCollection<string>> PauseTriggers(GroupMatcher<TriggerKey> matcher, CancellationToken cancellationToken = default)
@@ -600,11 +622,13 @@ namespace Quartz.Impl.RavenDB
                 await PauseJob(jobKey, cancellationToken);
                 pausedGroups.Add(jobKey.Group);
 
-                using var session = DocumentStoreHolder.Store.OpenAsyncSession();
-                var sched = await session.LoadAsync<Scheduler>(InstanceName, cancellationToken);
-                sched.PausedJobGroups.Add(matcher.CompareToValue);
+                using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+                {
+                    var sched = await session.LoadAsync<Scheduler>(InstanceName, cancellationToken);
+                    sched.PausedJobGroups.Add(matcher.CompareToValue);
 
-                await session.SaveChangesAsync(cancellationToken);
+                    await session.SaveChangesAsync(cancellationToken);
+                }
             }
 
             return pausedGroups;
@@ -617,21 +641,23 @@ namespace Quartz.Impl.RavenDB
                 return;
             }
 
-            using var session = DocumentStoreHolder.Store.OpenAsyncSession();
-            var trigger = await session.LoadAsync<Trigger>(triggerKey.GetDatabaseId(), cancellationToken);
-
-            // if the trigger is not paused resuming it does not make sense...
-            if (trigger.State != InternalTriggerState.Paused &&
-                trigger.State != InternalTriggerState.PausedAndBlocked)
+            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
             {
-                return;
+                var trigger = await session.LoadAsync<Trigger>(triggerKey.GetDatabaseId(), cancellationToken);
+
+                // if the trigger is not paused resuming it does not make sense...
+                if (trigger.State != InternalTriggerState.Paused &&
+                    trigger.State != InternalTriggerState.PausedAndBlocked)
+                {
+                    return;
+                }
+
+                trigger.State = (await GetBlockedJobs(cancellationToken)).Contains(trigger.JobKey) ? InternalTriggerState.Blocked : InternalTriggerState.Waiting;
+
+                await ApplyMisfire(trigger, cancellationToken);
+
+                await session.SaveChangesAsync(cancellationToken);
             }
-
-            trigger.State = (await GetBlockedJobs(cancellationToken)).Contains(trigger.JobKey) ? InternalTriggerState.Blocked : InternalTriggerState.Waiting;
-
-            await ApplyMisfire(trigger, cancellationToken);
-
-            await session.SaveChangesAsync(cancellationToken);
         }
 
         public async Task<IReadOnlyCollection<string>> ResumeTriggers(GroupMatcher<TriggerKey> matcher, CancellationToken cancellationToken = default)
@@ -650,19 +676,19 @@ namespace Quartz.Impl.RavenDB
 
         public async Task<IReadOnlyCollection<string>> GetPausedTriggerGroups(CancellationToken cancellationToken = default)
         {
-            using var session = DocumentStoreHolder.Store.OpenAsyncSession();
-            return await session
-                .Query<Trigger>()
-                    .Where(t => t.State == InternalTriggerState.Paused || t.State == InternalTriggerState.PausedAndBlocked)
-                    .Distinct()
-                    .Select(t => t.Group)
-                    .ToListAsync(cancellationToken);
+            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+                return await session
+                    .Query<Trigger>()
+                        .Where(t => t.State == InternalTriggerState.Paused || t.State == InternalTriggerState.PausedAndBlocked)
+                        .Distinct()
+                        .Select(t => t.Group)
+                        .ToListAsync(cancellationToken);
         }
 
         public async Task ResumeJob(JobKey jobKey, CancellationToken cancellationToken = default)
         {
             var triggersForJob = await GetTriggersForJob(jobKey, cancellationToken);
-            
+
             foreach (var trigger in triggersForJob)
             {
                 await ResumeTrigger(trigger.Key, cancellationToken);
@@ -718,16 +744,18 @@ namespace Quartz.Impl.RavenDB
 
         public async Task ResumeAll(CancellationToken cancellationToken = default)
         {
-            using var session = DocumentStoreHolder.Store.OpenAsyncSession();
-            var sched = await session.LoadAsync<Scheduler>(InstanceName, cancellationToken);
-
-            sched.PausedJobGroups.Clear();
-
-            var triggerGroupNames = await GetTriggerGroupNames(cancellationToken);
-
-            foreach (var groupName in triggerGroupNames)
+            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
             {
-                await ResumeTriggers(GroupMatcher<TriggerKey>.GroupEquals(groupName), cancellationToken);
+                var sched = await session.LoadAsync<Scheduler>(InstanceName, cancellationToken);
+
+                sched.PausedJobGroups.Clear();
+
+                var triggerGroupNames = await GetTriggerGroupNames(cancellationToken);
+
+                foreach (var groupName in triggerGroupNames)
+                {
+                    await ResumeTriggers(GroupMatcher<TriggerKey>.GroupEquals(groupName), cancellationToken);
+                }
             }
         }
 
@@ -821,14 +849,16 @@ namespace Quartz.Impl.RavenDB
 
         public async Task ReleaseAcquiredTrigger(IOperableTrigger trigger, CancellationToken cancellationToken = default)
         {
-            using var session = DocumentStoreHolder.Store.OpenAsyncSession();
-            var trig = await session.LoadAsync<Trigger>(trigger.GetDatabaseId(), cancellationToken);
-            if ((trig is null) || (trig.State != InternalTriggerState.Acquired))
+            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
             {
-                return;
+                var trig = await session.LoadAsync<Trigger>(trigger.GetDatabaseId(), cancellationToken);
+                if ((trig is null) || (trig.State != InternalTriggerState.Acquired))
+                {
+                    return;
+                }
+                trig.State = InternalTriggerState.Waiting;
+                await session.SaveChangesAsync(cancellationToken);
             }
-            trig.State = InternalTriggerState.Waiting;
-            await session.SaveChangesAsync(cancellationToken);
         }
 
         public async Task<IReadOnlyCollection<TriggerFiredResult>> TriggersFired(IReadOnlyCollection<IOperableTrigger> triggers, CancellationToken cancellationToken = default)
@@ -909,99 +939,101 @@ namespace Quartz.Impl.RavenDB
 
         public async Task TriggeredJobComplete(IOperableTrigger trigger, IJobDetail jobDetail, SchedulerInstruction triggerInstCode, CancellationToken cancellationToken = default)
         {
-            using var session = DocumentStoreHolder.Store.OpenAsyncSession();
-            var entry = await session.LoadAsync<Trigger>(trigger.GetDatabaseId(), cancellationToken);
-            var sched = await session.LoadAsync<Scheduler>(InstanceName, cancellationToken);
-
-            // It's possible that the job or trigger is null if it was deleted during execution
-            var job = await session.LoadAsync<Job>(trigger.GetJobDatabaseId(), cancellationToken);
-
-            if (job != null)
+            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
             {
-                if (jobDetail.PersistJobDataAfterExecution)
+                var entry = await session.LoadAsync<Trigger>(trigger.GetDatabaseId(), cancellationToken);
+                var sched = await session.LoadAsync<Scheduler>(InstanceName, cancellationToken);
+
+                // It's possible that the job or trigger is null if it was deleted during execution
+                var job = await session.LoadAsync<Job>(trigger.GetJobDatabaseId(), cancellationToken);
+
+                if (job != null)
                 {
-                    job.JobDataMap = jobDetail.JobDataMap;
-                }
-
-                if (job.ConcurrentExecutionDisallowed)
-                {
-                    sched.BlockedJobs.Remove(job.Key);
-
-                    List<Trigger> trigs = session.Query<Trigger>()
-                        .Where(t => Equals(t.Group, job.Group) && Equals(t.JobName, job.Name))
-                        .ToList();
-
-                    foreach (Trigger t in trigs)
+                    if (jobDetail.PersistJobDataAfterExecution)
                     {
-                        var triggerToUpdate = await session.LoadAsync<Trigger>(t.Key, cancellationToken);
-                        if (t.State == InternalTriggerState.Blocked)
-                        {
-                            triggerToUpdate.State = InternalTriggerState.Waiting;
-                        }
-                        if (t.State == InternalTriggerState.PausedAndBlocked)
-                        {
-                            triggerToUpdate.State = InternalTriggerState.Paused;
-                        }
+                        job.JobDataMap = jobDetail.JobDataMap;
                     }
 
-                    signaler.SignalSchedulingChange(null);
-                }
-            }
-            else
-            {
-                // even if it was deleted, there may be cleanup to do
-                sched.BlockedJobs.Remove(jobDetail.Key.Name + "/" + jobDetail.Key.Group);
-            }
+                    if (job.ConcurrentExecutionDisallowed)
+                    {
+                        sched.BlockedJobs.Remove(job.Key);
 
-            // check for trigger deleted during execution...
-            if (trigger != null)
-            {
-                if (triggerInstCode == SchedulerInstruction.DeleteTrigger)
-                {
-                    // Deleting triggers
-                    DateTimeOffset? d = trigger.GetNextFireTimeUtc();
-                    if (!d.HasValue)
-                    {
-                        // double check for possible reschedule within job 
-                        // execution, which would cancel the need to delete...
-                        d = entry.NextFireTimeUtc;
-                        if (!d.HasValue)
+                        List<Trigger> trigs = session.Query<Trigger>()
+                            .Where(t => Equals(t.Group, job.Group) && Equals(t.JobName, job.Name))
+                            .ToList();
+
+                        foreach (Trigger t in trigs)
                         {
-                            await RemoveTrigger(trigger.Key, cancellationToken);
+                            var triggerToUpdate = await session.LoadAsync<Trigger>(t.Key, cancellationToken);
+                            if (t.State == InternalTriggerState.Blocked)
+                            {
+                                triggerToUpdate.State = InternalTriggerState.Waiting;
+                            }
+                            if (t.State == InternalTriggerState.PausedAndBlocked)
+                            {
+                                triggerToUpdate.State = InternalTriggerState.Paused;
+                            }
                         }
-                        else
-                        {
-                            //Deleting cancelled - trigger still active
-                        }
-                    }
-                    else
-                    {
-                        await RemoveTrigger(trigger.Key, cancellationToken);
+
                         signaler.SignalSchedulingChange(null);
                     }
                 }
-                else if (triggerInstCode == SchedulerInstruction.SetTriggerComplete)
+                else
                 {
-                    entry.State = InternalTriggerState.Complete;
-                    signaler.SignalSchedulingChange(null);
+                    // even if it was deleted, there may be cleanup to do
+                    sched.BlockedJobs.Remove(jobDetail.Key.Name + "/" + jobDetail.Key.Group);
                 }
-                else if (triggerInstCode == SchedulerInstruction.SetTriggerError)
+
+                // check for trigger deleted during execution...
+                if (trigger != null)
                 {
-                    entry.State = InternalTriggerState.Error;
-                    signaler.SignalSchedulingChange(null);
+                    if (triggerInstCode == SchedulerInstruction.DeleteTrigger)
+                    {
+                        // Deleting triggers
+                        DateTimeOffset? d = trigger.GetNextFireTimeUtc();
+                        if (!d.HasValue)
+                        {
+                            // double check for possible reschedule within job 
+                            // execution, which would cancel the need to delete...
+                            d = entry.NextFireTimeUtc;
+                            if (!d.HasValue)
+                            {
+                                await RemoveTrigger(trigger.Key, cancellationToken);
+                            }
+                            else
+                            {
+                                //Deleting cancelled - trigger still active
+                            }
+                        }
+                        else
+                        {
+                            await RemoveTrigger(trigger.Key, cancellationToken);
+                            signaler.SignalSchedulingChange(null);
+                        }
+                    }
+                    else if (triggerInstCode == SchedulerInstruction.SetTriggerComplete)
+                    {
+                        entry.State = InternalTriggerState.Complete;
+                        signaler.SignalSchedulingChange(null);
+                    }
+                    else if (triggerInstCode == SchedulerInstruction.SetTriggerError)
+                    {
+                        entry.State = InternalTriggerState.Error;
+                        signaler.SignalSchedulingChange(null);
+                    }
+                    else if (triggerInstCode == SchedulerInstruction.SetAllJobTriggersError)
+                    {
+                        await SetAllTriggersOfJobToState(trigger.JobKey, InternalTriggerState.Error, cancellationToken);
+                        signaler.SignalSchedulingChange(null);
+                    }
+                    else if (triggerInstCode == SchedulerInstruction.SetAllJobTriggersComplete)
+                    {
+                        await SetAllTriggersOfJobToState(trigger.JobKey, InternalTriggerState.Complete, cancellationToken);
+                        signaler.SignalSchedulingChange(null);
+                    }
                 }
-                else if (triggerInstCode == SchedulerInstruction.SetAllJobTriggersError)
-                {
-                    await SetAllTriggersOfJobToState(trigger.JobKey, InternalTriggerState.Error, cancellationToken);
-                    signaler.SignalSchedulingChange(null);
-                }
-                else if (triggerInstCode == SchedulerInstruction.SetAllJobTriggersComplete)
-                {
-                    await SetAllTriggersOfJobToState(trigger.JobKey, InternalTriggerState.Complete, cancellationToken);
-                    signaler.SignalSchedulingChange(null);
-                }
+                await session.SaveChangesAsync(cancellationToken);
             }
-            await session.SaveChangesAsync(cancellationToken);
         }
     }
 }

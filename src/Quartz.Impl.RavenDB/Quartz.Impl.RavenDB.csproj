@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <ProjectGuid>{F17F87F5-9855-46ED-AAAD-DBF163F78B02}</ProjectGuid>
-    <TargetFramework>netstandard2.1</TargetFramework>
+    <TargetFrameworks>net461;net472;netstandard2.0</TargetFrameworks>
     <AssemblyTitle>Quartz.Impl.RavenDB</AssemblyTitle>
     <Product>Quartz.Impl.RavenDB</Product>
     <Description>RavenDB JobStore support for Quartz.NET scheduler.</Description>
