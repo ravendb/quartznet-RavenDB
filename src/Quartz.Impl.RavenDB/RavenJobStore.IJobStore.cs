@@ -964,7 +964,11 @@ namespace Quartz.Impl.RavenDB
         {
             using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
             {
-                var entry = await session.LoadAsync<Trigger>(trigger.GetDatabaseId(), cancellationToken);
+                var entry = await session
+                    .Include<Trigger>(t => t.Scheduler) // preload scheduler
+                    .Include<Trigger>(t => t.JobKey) // preload job
+                    .LoadAsync<Trigger>(trigger.GetDatabaseId(), cancellationToken);
+                
                 var sched = await session.LoadAsync<Scheduler>(InstanceName, cancellationToken);
 
                 // It's possible that the job or trigger is null if it was deleted during execution
