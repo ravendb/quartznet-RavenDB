@@ -10,13 +10,10 @@ using System.Runtime.CompilerServices;
 using Common.Logging;
 
 using Quartz.Core;
-using Quartz.Impl.Matchers;
 using Quartz.Spi;
 using Quartz.Simpl;
 using System.Threading.Tasks;
 using Raven.Client.Documents.Linq;
-using Raven.Client.Documents.Queries;
-using Quartz.Impl.RavenDB.Util;
 using Raven.Client.Documents;
 
 namespace Quartz.Impl.RavenDB
@@ -188,7 +185,6 @@ namespace Quartz.Impl.RavenDB
             return Convert.ToString(value, CultureInfo.InvariantCulture);
         }
 
-
         /// <summary>
         /// Clear (delete!) all scheduling data - all <see cref="IJob"/>s, <see cref="ITrigger" />s
         /// <see cref="ICalendar" />s.
@@ -201,7 +197,6 @@ namespace Quartz.Impl.RavenDB
             //var op = DocumentStoreHolder.Store.DatabaseCommands.DeleteByIndex("Raven/DocumentsByEntityName", new IndexQuery(), new BulkOperationOptions() { AllowStale = true });
             //op.WaitForCompletion();
         }
-
 
         public async Task<Dictionary<string, ICalendar>> RetrieveCalendarCollection(CancellationToken cancellationToken)
         {
@@ -222,112 +217,16 @@ namespace Quartz.Impl.RavenDB
             return sched.Calendars;
         }
 
-
-        /// <summary>
-        /// Get the number of <see cref="ITrigger" />s that are
-        /// stored in the <see cref="IJobStore" />.
-        /// </summary>
-        /// <returns></returns>
-        [MethodImpl(MethodImplOptions.Synchronized)]
-        public int GetNumberOfTriggers()
+        public async Task<ISet<string>> GetPausedJobGroups(CancellationToken cancellationToken)
         {
-            using (var session = DocumentStoreHolder.Store.OpenSession())
-            {
-                return session.Query<Trigger>().Count();
-            }
+            using var session = DocumentStoreHolder.Store.OpenAsyncSession();
+            return (await session.LoadAsync<Scheduler>(InstanceName, cancellationToken)).PausedJobGroups;
         }
 
-
-        /// <summary>
-        /// Get the names of all of the <see cref="IJob" /> s that
-        /// have the given group name.
-        /// <para>
-        /// If there are no jobs in the given group name, the result should be a
-        /// zero-length array (not <see langword="null" />).
-        /// </para>
-        /// </summary>
-        /// <param name="matcher"></param>
-        /// <returns></returns>
-        [MethodImpl(MethodImplOptions.Synchronized)]
-        public ISet<JobKey> GetJobKeys(GroupMatcher<JobKey> matcher)
+        public async Task<ISet<string>> GetBlockedJobs(CancellationToken cancellationToken)
         {
-            StringOperator op = matcher.CompareWithOperator;
-            string compareToValue = matcher.CompareToValue;
-
-            var result = new HashSet<JobKey>();
-
-            using (var session = DocumentStoreHolder.Store.OpenSession())
-            {
-                var allJobs = session.Query<Job>();
-
-                foreach (var job in allJobs)
-                {
-                    if (op.Evaluate(job.Group, compareToValue))
-                    {
-                        result.Add(new JobKey(job.Name, job.Group));
-                    }
-                }
-            }
-            return result;
-        }
-
-        /// <summary>
-        /// Get the names of all of the <see cref="ITrigger" />s
-        /// that have the given group name.
-        /// <para>
-        /// If there are no triggers in the given group name, the result should be a
-        /// zero-length array (not <see langword="null" />).
-        /// </para>
-        /// </summary>
-        [MethodImpl(MethodImplOptions.Synchronized)]
-        public ISet<TriggerKey> GetTriggerKeys(GroupMatcher<TriggerKey> matcher)
-        {
-            StringOperator op = matcher.CompareWithOperator;
-            string compareToValue = matcher.CompareToValue;
-
-            var result = new HashSet<TriggerKey>();
-
-            using (var session = DocumentStoreHolder.Store.OpenSession())
-            {
-                var allTriggers = session.Query<Trigger>();
-
-                foreach (var trigger in allTriggers)
-                {
-                    if (op.Evaluate(trigger.Group, compareToValue))
-                    {
-                        result.Add(new TriggerKey(trigger.Name, trigger.Group));
-                    }
-                }
-            }
-            return result;
-        }
-
-
-
-        /// <summary>
-        /// Gets the paused job groups.
-        /// </summary>
-        /// <returns></returns>
-        [MethodImpl(MethodImplOptions.Synchronized)]
-        public ISet<string> GetPausedJobGroups()
-        {
-            using (var session = DocumentStoreHolder.Store.OpenSession())
-            {
-                return session.Load<Scheduler>(InstanceName).PausedJobGroups;
-            }
-        }
-
-        /// <summary>
-        /// Gets the blocked jobs set.
-        /// </summary>
-        /// <returns></returns>
-        [MethodImpl(MethodImplOptions.Synchronized)]
-        public ISet<string> GetBlockedJobs()
-        {
-            using (var session = DocumentStoreHolder.Store.OpenSession())
-            {
-                return session.Load<Scheduler>(InstanceName).BlockedJobs;
-            }
+            using var session = DocumentStoreHolder.Store.OpenAsyncSession();
+            return (await session.LoadAsync<Scheduler>(InstanceName, cancellationToken)).BlockedJobs;
         }
 
         protected virtual DateTimeOffset MisfireTime
@@ -401,8 +300,6 @@ namespace Quartz.Impl.RavenDB
 
             await session.SaveChangesAsync(cancellationToken);
         }
-
-        
 
         /// <summary> 
         /// The time span by which a trigger must have missed its
