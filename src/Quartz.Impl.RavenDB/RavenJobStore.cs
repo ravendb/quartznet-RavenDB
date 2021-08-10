@@ -75,12 +75,6 @@ namespace Quartz.Impl.RavenDB
 
             InstanceName = "UnitTestScheduler";
             InstanceId = "instance_two";
-
-            //
-            // TODO: necessary?
-            // 
-            new TriggerIndex().Execute(DocumentStoreHolder.Store);
-            new JobIndex().Execute(DocumentStoreHolder.Store);
         }
 
         public async Task SetSchedulerState(SchedulerState state, CancellationToken cancellationToken)
