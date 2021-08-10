@@ -39,18 +39,22 @@ namespace Examples
 
                 IJobDetail emptyFridgeJob = JobBuilder.Create<EmptyFridge>()
                     .WithIdentity("EmptyFridgeJob", "Office")
+                    .RequestRecovery()
                     .Build();
 
                 IJobDetail turnOffLightsJob = JobBuilder.Create<TurnOffLights>()
                     .WithIdentity("TurnOffLightsJob", "Office")
+                    .RequestRecovery()
                     .Build();
 
                 IJobDetail checkAliveJob = JobBuilder.Create<CheckAlive>()
                     .WithIdentity("CheckAliveJob", "Office")
+                    .RequestRecovery()
                     .Build();
 
                 IJobDetail visitJob = JobBuilder.Create<Visit>()
                     .WithIdentity("VisitJob", "Office")
+                    .RequestRecovery()
                     .Build();
 
                 // Weekly, Friday at 10 AM (Cron Trigger)
@@ -84,13 +88,13 @@ namespace Examples
                     .Build();
 
 
-                scheduler.ScheduleJob(checkAliveJob, checkAliveTrigger);
-                scheduler.ScheduleJob(emptyFridgeJob, emptyFridgeTrigger);
-                scheduler.ScheduleJob(turnOffLightsJob, turnOffLightsTrigger);
-                scheduler.ScheduleJob(visitJob, visitTrigger);
+                //scheduler.ScheduleJob(checkAliveJob, checkAliveTrigger);
+                //scheduler.ScheduleJob(emptyFridgeJob, emptyFridgeTrigger);
+                //scheduler.ScheduleJob(turnOffLightsJob, turnOffLightsTrigger);
+                //scheduler.ScheduleJob(visitJob, visitTrigger);
 
                 // some sleep to show what's happening
-                Thread.Sleep(TimeSpan.FromSeconds(60));
+                Thread.Sleep(TimeSpan.FromSeconds(600));
 
                 scheduler.Shutdown();
             }

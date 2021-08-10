@@ -886,7 +886,9 @@ namespace Quartz.Impl.RavenDB
                     foreach (IOperableTrigger tr in triggers)
                     {
                         // was the trigger deleted since being acquired?
-                        var trigger = await session.LoadAsync<Trigger>(tr.GetDatabaseId(), cancellationToken);
+                        var trigger = await session
+                            .Include<Trigger>(t => t.JobKey)
+                            .LoadAsync<Trigger>(tr.GetDatabaseId(), cancellationToken);
 
                         // was the trigger completed, paused, blocked, etc. since being acquired?
                         if (trigger?.State != InternalTriggerState.Acquired)
@@ -908,13 +910,18 @@ namespace Quartz.Impl.RavenDB
                         var trig = trigger.Deserialize();
                         trig.Triggered(cal);
 
+                        var dbJob = (await session.LoadAsync<Job>(trig.JobKey.GetDatabaseId(), cancellationToken)).Deserialize();
+
                         TriggerFiredBundle bndle = new TriggerFiredBundle(
-                            await RetrieveJob(trig.JobKey, cancellationToken),
+                            dbJob,
                             trig,
                             cal,
-                            false, SystemTime.UtcNow(),
-                            trig.GetPreviousFireTimeUtc(), prevFireTime,
-                            trig.GetNextFireTimeUtc());
+                            false, 
+                            SystemTime.UtcNow(),
+                            trig.GetPreviousFireTimeUtc(), 
+                            prevFireTime,
+                            trig.GetNextFireTimeUtc()
+                            );
 
                         IJobDetail job = bndle.JobDetail;
 

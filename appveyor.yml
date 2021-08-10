@@ -13,7 +13,7 @@ dotnet_csproj:
   file_version: '{version}'
   informational_version: '{version}'
 before_build:
-- nuget restore
+- nuget restore .\src\
 build:
   project: $(APPVEYOR_BUILD_FOLDER)\src\Quartz.Impl.RavenDB.sln
 test: off
