@@ -253,7 +253,7 @@ namespace Quartz.Impl.RavenDB
                     await signaler.NotifySchedulerListenersJobDeleted(job.Key, cancellationToken);
                 }
 
-                await session.SaveChangesAsync();
+                await session.SaveChangesAsync(cancellationToken);
             }
 
             return true;
