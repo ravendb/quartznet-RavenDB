@@ -651,14 +651,14 @@ namespace Quartz.Impl.RavenDB
 
         public async Task ResumeTrigger(TriggerKey triggerKey, CancellationToken cancellationToken = default)
         {
-            if (!await CheckExists(triggerKey, cancellationToken))
-            {
-                return;
-            }
-
             using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
             {
                 var trigger = await session.LoadAsync<Trigger>(triggerKey.GetDatabaseId(), cancellationToken);
+
+                if (trigger is null)
+                {
+                    return;
+                }
 
                 // if the trigger is not paused resuming it does not make sense...
                 if (trigger.State != InternalTriggerState.Paused &&
