@@ -185,37 +185,37 @@ namespace Quartz.Impl.RavenDB
 
         public async Task StoreTrigger(IOperableTrigger newTrigger, bool replaceExisting, CancellationToken cancellationToken = default)
         {
-            if (await CheckExists(newTrigger.Key, cancellationToken))
-            {
-                if (!replaceExisting)
-                {
-                    throw new ObjectAlreadyExistsException(newTrigger);
-                }
-            }
-
-            if (!await CheckExists(newTrigger.JobKey, cancellationToken))
-            {
-                throw new JobPersistenceException("The job (" + newTrigger.JobKey + ") referenced by the trigger does not exist.");
-            }
-
-            var trigger = new Trigger(newTrigger, InstanceName);
-
-            // make sure trigger group is not paused and that job is not blocked
-            if ((await GetPausedTriggerGroups(cancellationToken)).Contains(newTrigger.Key.Group) || (await GetPausedJobGroups(cancellationToken)).Contains(newTrigger.JobKey.Group))
-            {
-                trigger.State = InternalTriggerState.Paused;
-                if ((await GetBlockedJobs(cancellationToken)).Contains(newTrigger.GetJobDatabaseId()))
-                {
-                    trigger.State = InternalTriggerState.PausedAndBlocked;
-                }
-            }
-            else if ((await GetBlockedJobs(cancellationToken)).Contains(newTrigger.GetJobDatabaseId()))
-            {
-                trigger.State = InternalTriggerState.Blocked;
-            }
-
             using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
             {
+                if (await session.Advanced.ExistsAsync(newTrigger.Key.GetDatabaseId(), cancellationToken))
+                {
+                    if (!replaceExisting)
+                    {
+                        throw new ObjectAlreadyExistsException(newTrigger);
+                    }
+                }
+
+                if (!await session.Advanced.ExistsAsync(newTrigger.JobKey.GetDatabaseId(), cancellationToken))
+                {
+                    throw new JobPersistenceException("The job (" + newTrigger.JobKey + ") referenced by the trigger does not exist.");
+                }
+
+                var trigger = new Trigger(newTrigger, InstanceName);
+
+                // make sure trigger group is not paused and that job is not blocked
+                if ((await GetPausedTriggerGroups(cancellationToken)).Contains(newTrigger.Key.Group) || (await GetPausedJobGroups(cancellationToken)).Contains(newTrigger.JobKey.Group))
+                {
+                    trigger.State = InternalTriggerState.Paused;
+                    if ((await GetBlockedJobs(cancellationToken)).Contains(newTrigger.GetJobDatabaseId()))
+                    {
+                        trigger.State = InternalTriggerState.PausedAndBlocked;
+                    }
+                }
+                else if ((await GetBlockedJobs(cancellationToken)).Contains(newTrigger.GetJobDatabaseId()))
+                {
+                    trigger.State = InternalTriggerState.Blocked;
+                }
+
                 // Overwrite if exists
                 await session.StoreAsync(trigger, trigger.Key, cancellationToken);
                 await session.SaveChangesAsync(cancellationToken);
