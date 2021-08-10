@@ -887,7 +887,7 @@ namespace Quartz.Impl.RavenDB
                     {
                         // was the trigger deleted since being acquired?
                         var trigger = await session
-                            .Include<Trigger>(t => t.JobKey)
+                            .Include<Trigger>(t => t.JobKey) // preload
                             .LoadAsync<Trigger>(tr.GetDatabaseId(), cancellationToken);
 
                         // was the trigger completed, paused, blocked, etc. since being acquired?
@@ -910,6 +910,7 @@ namespace Quartz.Impl.RavenDB
                         var trig = trigger.Deserialize();
                         trig.Triggered(cal);
 
+                        // cached load
                         var dbJob = (await session.LoadAsync<Job>(trig.JobKey.GetDatabaseId(), cancellationToken)).Deserialize();
 
                         TriggerFiredBundle bndle = new TriggerFiredBundle(
