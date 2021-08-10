@@ -86,18 +86,18 @@ namespace Quartz.Impl.RavenDB
 
         public async Task StoreJob(IJobDetail newJob, bool replaceExisting, CancellationToken cancellationToken = default)
         {
-            if (await CheckExists(newJob.Key, cancellationToken))
-            {
-                if (!replaceExisting)
-                {
-                    throw new ObjectAlreadyExistsException(newJob);
-                }
-            }
-
-            var job = new Job(newJob, InstanceName);
-
             using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
             {
+                if (await session.Advanced.ExistsAsync(newJob.Key.GetDatabaseId(), cancellationToken))
+                {
+                    if (!replaceExisting)
+                    {
+                        throw new ObjectAlreadyExistsException(newJob);
+                    }
+                }
+
+                var job = new Job(newJob, InstanceName);
+
                 // Store() overwrites if job id already exists
                 await session.StoreAsync(job, job.Key, cancellationToken);
                 await session.SaveChangesAsync(cancellationToken);
@@ -146,7 +146,7 @@ namespace Quartz.Impl.RavenDB
         {
             using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
             {
-                if (!await CheckExists(jobKey, cancellationToken))
+                if (!await session.Advanced.ExistsAsync(jobKey.GetDatabaseId(), cancellationToken))
                 {
                     return false;
                 }
@@ -160,20 +160,24 @@ namespace Quartz.Impl.RavenDB
 
         public async Task<bool> RemoveJobs(IReadOnlyCollection<JobKey> jobKeys, CancellationToken cancellationToken = default)
         {
-            // Returns false in case at least one job removal fails
-            var result = true;
-            foreach (var key in jobKeys)
+            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
             {
-                result &= await RemoveJob(key, cancellationToken);
+                foreach (var key in jobKeys)
+                {
+                    session.Delete(key);
+                }
+
+                await session.SaveChangesAsync(cancellationToken);
+
+                return true;
             }
-            return result;
         }
 
         public async Task<IJobDetail> RetrieveJob(JobKey jobKey, CancellationToken cancellationToken = default)
         {
             using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
             {
-                var job = await session.LoadAsync<Job>(jobKey.Name + "/" + jobKey.Group, cancellationToken);
+                var job = await session.LoadAsync<Job>(jobKey.GetDatabaseId(), cancellationToken);
 
                 return job?.Deserialize();
             }
