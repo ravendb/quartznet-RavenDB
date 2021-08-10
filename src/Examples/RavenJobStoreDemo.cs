@@ -49,6 +49,10 @@ namespace Examples
                     .WithIdentity("CheckAliveJob", "Office")
                     .Build();
 
+                IJobDetail visitJob = JobBuilder.Create<CheckAlive>()
+                    .WithIdentity("VisitJob", "Office")
+                    .Build();
+
                 // Weekly, Friday at 10 AM (Cron Trigger)
                 var emptyFridgeTrigger = TriggerBuilder.Create()
                     .WithIdentity("EmptyFridge", "Office")
@@ -74,10 +78,16 @@ namespace Examples
                         .RepeatForever())
                     .Build();
 
+                ITrigger visitTrigger = TriggerBuilder.Create()
+                    .WithIdentity("Visit", "Office")
+                    .StartAt(DateTime.UtcNow.AddSeconds(3))
+                    .Build();
 
-                //scheduler.ScheduleJob(checkAliveJob, checkAliveTrigger);
-                //scheduler.ScheduleJob(emptyFridgeJob, emptyFridgeTrigger);
-                //scheduler.ScheduleJob(turnOffLightsJob, turnOffLightsTrigger);
+
+                scheduler.ScheduleJob(checkAliveJob, checkAliveTrigger);
+                scheduler.ScheduleJob(emptyFridgeJob, emptyFridgeTrigger);
+                scheduler.ScheduleJob(turnOffLightsJob, turnOffLightsTrigger);
+                scheduler.ScheduleJob(visitJob, visitTrigger);
 
                 // some sleep to show what's happening
                 Thread.Sleep(TimeSpan.FromSeconds(600));

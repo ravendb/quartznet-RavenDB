@@ -224,29 +224,38 @@ namespace Quartz.Impl.RavenDB
 
         public async Task<bool> RemoveTrigger(TriggerKey triggerKey, CancellationToken cancellationToken = default)
         {
-            if (!await CheckExists(triggerKey, cancellationToken))
-            {
-                return false;
-            }
             using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
             {
-                var trigger = await session.LoadAsync<Trigger>(triggerKey.GetDatabaseId(), cancellationToken);
-                var job = await RetrieveJob(new JobKey(trigger.JobName, trigger.Group), cancellationToken);
+                if (!await session.Advanced.ExistsAsync(triggerKey.GetDatabaseId(), cancellationToken))
+                {
+                    return false;
+                }
+
+                // Request trigger and associated job
+                var trigger = await session
+                    .Include<Trigger>(t => t.JobKey)
+                    .LoadAsync<Trigger>(triggerKey.GetDatabaseId(), cancellationToken);
+                var job = (await session.LoadAsync<Job>(trigger.JobKey, cancellationToken)).Deserialize();
 
                 // Delete trigger
                 session.Delete(triggerKey.GetDatabaseId());
-                await session.SaveChangesAsync();
+
+                // Check for more triggers            
+                var hasMoreTriggers = (await session
+                        .Query<Trigger>()
+                        .Where(t => Equals(t.JobName, job.Key.Name) && Equals(t.Group, job.Key.Group) && !Equals(t.Key, trigger.Key))
+                        .CountAsync(cancellationToken)) > 0;
 
                 // Remove the trigger's job if it is not associated with any other triggers
-                var trigList = await GetTriggersForJob(job.Key, cancellationToken);
-                if ((trigList == null || trigList.Count == 0) && !job.Durable)
+                if (!hasMoreTriggers && !job.Durable)
                 {
-                    if (await RemoveJob(job.Key, cancellationToken))
-                    {
-                        await signaler.NotifySchedulerListenersJobDeleted(job.Key, cancellationToken);
-                    }
+                    session.Delete(job.Key.GetDatabaseId());
+                    await signaler.NotifySchedulerListenersJobDeleted(job.Key, cancellationToken);
                 }
+
+                await session.SaveChangesAsync();
             }
+
             return true;
         }
 
