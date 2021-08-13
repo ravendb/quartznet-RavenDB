@@ -17,7 +17,8 @@ namespace Quartz.Impl.RavenDB
 {
     public partial class RavenJobStore
     {
-        public Task Initialize(ITypeLoadHelper loadHelper, ISchedulerSignaler signaler, CancellationToken cancellationToken = default)
+        public Task Initialize(ITypeLoadHelper loadHelper, ISchedulerSignaler signaler,
+            CancellationToken cancellationToken = default)
         {
             _signaler = signaler;
 
