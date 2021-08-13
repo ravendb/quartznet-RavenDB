@@ -646,16 +646,20 @@ namespace Quartz.Impl.RavenDB
         {
             using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
             {
-                var trigger = await session.LoadAsync<Trigger>(triggerKey.GetDatabaseId(), cancellationToken);
+                var trigger = await session
+                    .Include<Trigger>(t => t.Scheduler) // preload
+                    .LoadAsync<Trigger>(triggerKey.GetDatabaseId(), cancellationToken);
 
                 if (trigger is null) return;
+
+                var blocked = (await session.LoadAsync<Scheduler>(InstanceName, cancellationToken)).BlockedJobs;
 
                 // if the trigger is not paused resuming it does not make sense...
                 if (trigger.State != InternalTriggerState.Paused &&
                     trigger.State != InternalTriggerState.PausedAndBlocked)
                     return;
 
-                trigger.State = (await GetBlockedJobs(cancellationToken)).Contains(trigger.JobKey)
+                trigger.State = blocked.Contains(trigger.JobKey)
                     ? InternalTriggerState.Blocked
                     : InternalTriggerState.Waiting;
 
