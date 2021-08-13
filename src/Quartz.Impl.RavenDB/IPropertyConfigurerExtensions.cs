@@ -3,7 +3,7 @@ using Quartz.Util;
 
 namespace Quartz.Impl.RavenDB
 {
-    public static class SchedulerBuilderExtensions
+    public static class IPropertyConfigurerExtensions
     {
         public static IPropertyConfigurer UseRavenDbStore(this IPropertyConfigurer builder, Action<RavenDbStoreOptions>? options = null)
         {
