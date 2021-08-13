@@ -42,7 +42,7 @@ namespace Quartz.Impl.RavenDB
                 // Scheduler with same instance name already exists, recover persistent data
                 try
                 {
-                    await RecoverSchedulerData(cancellationToken);
+                    await RecoverSchedulerData(session, cancellationToken);
                 }
                 catch (SchedulerException se)
                 {
@@ -404,7 +404,7 @@ namespace Quartz.Impl.RavenDB
                 {
                     var triggerToUpdate = await session.LoadAsync<Trigger>(triggerKey, cancellationToken);
                     var trigger = triggerToUpdate.Deserialize();
-                    trigger.UpdateWithNewCalendar(calendarCopy, misfireThreshold);
+                    trigger.UpdateWithNewCalendar(calendarCopy, _misfireThreshold);
                     triggerToUpdate.UpdateFireTimes(trigger);
                 }
 

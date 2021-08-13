@@ -11,6 +11,7 @@ using Quartz.Simpl;
 using Quartz.Spi;
 using Raven.Client.Documents;
 using Raven.Client.Documents.Linq;
+using Raven.Client.Documents.Session;
 
 namespace Quartz.Impl.RavenDB
 {
@@ -35,13 +36,14 @@ namespace Quartz.Impl.RavenDB
     /// <author>Iftah Ben Zaken</author>
     public partial class RavenJobStore : IJobStore
     {
-        private static long ftrCtr = SystemTime.UtcNow().Ticks;
+        private static long _ftrCtr = SystemTime.UtcNow().Ticks;
 
-        public static string defaultConnectionString =
+        public static string DefaultConnectionString =
             "Url=http://localhost:8080;DefaultDatabase=MyDatabaseName;ApiKey=YourKey";
 
         private ISchedulerSignaler _signaler;
-        private TimeSpan misfireThreshold = TimeSpan.FromSeconds(5);
+
+        private TimeSpan _misfireThreshold = TimeSpan.FromSeconds(5);
 
         public RavenJobStore()
         {
@@ -50,7 +52,7 @@ namespace Quartz.Impl.RavenDB
             {
                 ConnectionString = connectionStringSettings != null
                     ? connectionStringSettings.ConnectionString
-                    : defaultConnectionString
+                    : DefaultConnectionString
             };
 
             Url = stringBuilder["Url"] as string;
@@ -60,9 +62,12 @@ namespace Quartz.Impl.RavenDB
             InstanceName = "UnitTestScheduler";
             InstanceId = "instance_two";
         }
-
+        
         public static string Url { get; set; }
+        
         public static string DefaultDatabase { get; set; }
+        
+        [Obsolete]
         public static string ApiKey { get; set; }
 
         protected virtual DateTimeOffset MisfireTime
@@ -87,29 +92,33 @@ namespace Quartz.Impl.RavenDB
         public virtual TimeSpan MisfireThreshold
         {
             [MethodImpl(MethodImplOptions.Synchronized)]
-            get => misfireThreshold;
+            get => _misfireThreshold;
             [MethodImpl(MethodImplOptions.Synchronized)]
             set
             {
                 if (value.TotalMilliseconds < 1) throw new ArgumentException("MisfireThreshold must be larger than 0");
-                misfireThreshold = value;
+                _misfireThreshold = value;
             }
         }
 
         public bool SupportsPersistence => true;
+        
         public long EstimatedTimeToReleaseAndAcquireTrigger => 100;
+        
         public bool Clustered => false;
 
         public string InstanceId { get; set; }
+
         public string InstanceName { get; set; }
+
         public int ThreadPoolSize { get; set; }
 
         public async Task SetSchedulerState(SchedulerState state, CancellationToken cancellationToken)
         {
             using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
             {
-                var sched = await session.LoadAsync<Scheduler>(InstanceName, cancellationToken);
-                sched.State = state;
+                var scheduler = await session.LoadAsync<Scheduler>(InstanceName, cancellationToken);
+                scheduler.State = state;
                 await session.SaveChangesAsync(cancellationToken);
             }
         }
@@ -119,69 +128,63 @@ namespace Quartz.Impl.RavenDB
         ///     appropriate.
         /// </summary>
         /// <exception cref="JobPersistenceException">Condition.</exception>
-        protected virtual async Task RecoverSchedulerData(CancellationToken cancellationToken)
+        protected virtual async Task RecoverSchedulerData(IAsyncDocumentSession session,
+            CancellationToken cancellationToken)
         {
+            //
+            // TODO: can further be optimized
+            // 
+
             try
             {
                 // update inconsistent states
-                using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+                var queryResult = await session
+                    .Query<Trigger>()
+                    .Where(t =>
+                        t.Scheduler == InstanceName && (t.State == InternalTriggerState.Acquired ||
+                                                        t.State == InternalTriggerState.Blocked)
+                    )
+                    .ToListAsync(cancellationToken);
+                foreach (var trigger in queryResult)
                 {
-                    var queryResult = await session
-                        .Query<Trigger>()
-                        .Where(t => t.Scheduler == InstanceName && (t.State == InternalTriggerState.Acquired ||
-                                                                    t.State == InternalTriggerState.Blocked))
-                        .ToListAsync(cancellationToken);
-                    foreach (var trigger in queryResult)
-                    {
-                        var triggerToUpdate = await session.LoadAsync<Trigger>(trigger.Key, cancellationToken);
-                        triggerToUpdate.State = InternalTriggerState.Waiting;
-                    }
-
-                    await session.SaveChangesAsync(cancellationToken);
+                    var triggerToUpdate = await session.LoadAsync<Trigger>(trigger.Key, cancellationToken);
+                    triggerToUpdate.State = InternalTriggerState.Waiting;
                 }
 
+                await session.SaveChangesAsync(cancellationToken);
+                
                 // recover jobs marked for recovery that were not fully executed
                 IList<IOperableTrigger> recoveringJobTriggers = new List<IOperableTrigger>();
+                
+                var queryResultJobs = await session
+                    .Query<Job>()
+                    .Where(j => j.Scheduler == InstanceName && j.RequestsRecovery)
+                    .ToListAsync(cancellationToken);
 
-                using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
-                {
-                    var queryResultJobs = await session
-                        .Query<Job>()
-                        .Where(j => j.Scheduler == InstanceName && j.RequestsRecovery)
-                        .ToListAsync(cancellationToken);
+                foreach (var job in queryResultJobs)
+                    ((List<IOperableTrigger>) recoveringJobTriggers).AddRange(
+                        await GetTriggersForJob(new JobKey(job.Name, job.Group), cancellationToken));
 
-                    foreach (var job in queryResultJobs)
-                        ((List<IOperableTrigger>) recoveringJobTriggers).AddRange(
-                            await GetTriggersForJob(new JobKey(job.Name, job.Group), cancellationToken));
-                }
 
                 foreach (var trigger in recoveringJobTriggers)
-                    if (await CheckExists(trigger.JobKey))
+                    if (await CheckExists(trigger.JobKey, cancellationToken))
                     {
                         trigger.ComputeFirstFireTimeUtc(null);
                         await StoreTrigger(trigger, true, cancellationToken);
                     }
 
                 // remove lingering 'complete' triggers...
-                IList<Trigger> triggersInStateComplete;
-
-                using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
-                {
-                    triggersInStateComplete = await session
-                        .Query<Trigger>()
-                        .Where(t => t.Scheduler == InstanceName && t.State == InternalTriggerState.Complete)
-                        .ToListAsync(cancellationToken);
-                }
-
+                IList<Trigger> triggersInStateComplete = await session
+                    .Query<Trigger>()
+                    .Where(t => t.Scheduler == InstanceName && t.State == InternalTriggerState.Complete)
+                    .ToListAsync(cancellationToken);
+                
                 foreach (var trigger in triggersInStateComplete)
                     await RemoveTrigger(new TriggerKey(trigger.Name, trigger.Group), cancellationToken);
-
-                using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
-                {
-                    var schedToUpdate = await session.LoadAsync<Scheduler>(InstanceName, cancellationToken);
-                    schedToUpdate.State = SchedulerState.Started;
-                    await session.SaveChangesAsync(cancellationToken);
-                }
+                
+                var scheduler = await session.LoadAsync<Scheduler>(InstanceName, cancellationToken);
+                scheduler.State = SchedulerState.Started;
+                await session.SaveChangesAsync(cancellationToken);
             }
             catch (Exception e)
             {
@@ -193,41 +196,27 @@ namespace Quartz.Impl.RavenDB
         ///     Gets the fired trigger record id.
         /// </summary>
         /// <returns>The fired trigger record id.</returns>
-        [MethodImpl(MethodImplOptions.Synchronized)]
         protected virtual string GetFiredTriggerRecordId()
         {
-            var value = Interlocked.Increment(ref ftrCtr);
+            var value = Interlocked.Increment(ref _ftrCtr);
             return Convert.ToString(value, CultureInfo.InvariantCulture);
-        }
-
-        /// <summary>
-        ///     Clear (delete!) all scheduling data - all <see cref="IJob" />s, <see cref="ITrigger" />s
-        ///     <see cref="ICalendar" />s.
-        /// </summary>
-        /// <remarks>
-        /// </remarks>
-        [MethodImpl(MethodImplOptions.Synchronized)]
-        public void ClearAllSchedulingData()
-        {
-            //var op = DocumentStoreHolder.Store.DatabaseCommands.DeleteByIndex("Raven/DocumentsByEntityName", new IndexQuery(), new BulkOperationOptions() { AllowStale = true });
-            //op.WaitForCompletion();
         }
 
         public async Task<Dictionary<string, ICalendar>> RetrieveCalendarCollection(CancellationToken cancellationToken)
         {
             using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
             {
-                var sched = await session.LoadAsync<Scheduler>(InstanceName, cancellationToken);
+                var scheduler = await session.LoadAsync<Scheduler>(InstanceName, cancellationToken);
 
-                if (sched is null)
+                if (scheduler is null)
                     throw new NullReferenceException(string.Format(CultureInfo.InvariantCulture,
                         "Scheduler with instance name '{0}' is null", InstanceName));
 
-                if (sched.Calendars is null)
+                if (scheduler.Calendars is null)
                     throw new NullReferenceException(string.Format(CultureInfo.InvariantCulture,
                         "Calendar collection in '{0}' is null", InstanceName));
 
-                return sched.Calendars;
+                return scheduler.Calendars;
             }
         }
 
@@ -253,8 +242,8 @@ namespace Quartz.Impl.RavenDB
             if (MisfireThreshold > TimeSpan.Zero)
                 misfireTime = misfireTime.AddMilliseconds(-1 * MisfireThreshold.TotalMilliseconds);
 
-            var tnft = trigger.NextFireTimeUtc;
-            if (!tnft.HasValue || tnft.Value > misfireTime
+            var fireTimeUtc = trigger.NextFireTimeUtc;
+            if (!fireTimeUtc.HasValue || fireTimeUtc.Value > misfireTime
                                || trigger.MisfireInstruction == MisfireInstruction.IgnoreMisfirePolicy)
                 return false;
 
@@ -272,7 +261,7 @@ namespace Quartz.Impl.RavenDB
                 await _signaler.NotifySchedulerListenersFinalized(trig, cancellationToken);
                 trigger.State = InternalTriggerState.Complete;
             }
-            else if (tnft.Equals(trig.GetNextFireTimeUtc()))
+            else if (fireTimeUtc.Equals(trig.GetNextFireTimeUtc()))
             {
                 return false;
             }
@@ -285,10 +274,10 @@ namespace Quartz.Impl.RavenDB
         {
             using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
             {
-                var trigs = session.Query<Trigger>()
+                var triggers = session.Query<Trigger>()
                     .Where(t => Equals(t.Group, jobKey.Group) && Equals(t.JobName, jobKey.Name));
 
-                foreach (var trig in trigs)
+                foreach (var trig in triggers)
                 {
                     var triggerToUpdate = await session.LoadAsync<Trigger>(trig.Key, cancellationToken);
                     triggerToUpdate.State = state;
