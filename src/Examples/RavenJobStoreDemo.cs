@@ -9,15 +9,9 @@ namespace Examples
 {
     internal class RavenJobStoreDemo
     {
-
         private static void Main(string[] args)
         {
-            Common.Logging.LogManager.Adapter = new Common.Logging.Simple.ConsoleOutLoggerFactoryAdapter
-            {
-                Level = Common.Logging.LogLevel.Info
-            };
-
-            NameValueCollection properties = new NameValueCollection
+            var properties = new NameValueCollection
             {
                 // Setting some scheduler properties
                 ["quartz.scheduler.instanceName"] = "QuartzRavenDBDemo",
@@ -27,32 +21,31 @@ namespace Examples
                 ["quartz.threadPool.threadPriority"] = "Normal",
                 // Setting RavenDB as the persisted JobStore
                 ["quartz.jobStore.type"] = "Quartz.Impl.RavenDB.RavenJobStore, Quartz.Impl.RavenDB",
-                ["quartz.serializer.type"] = "json",
+                ["quartz.serializer.type"] = "json"
             };
 
             try
             {
-
                 ISchedulerFactory sf = new StdSchedulerFactory(properties);
-                IScheduler scheduler = sf.GetScheduler().Result;
+                var scheduler = sf.GetScheduler().Result;
                 scheduler.Start();
 
-                IJobDetail emptyFridgeJob = JobBuilder.Create<EmptyFridge>()
+                var emptyFridgeJob = JobBuilder.Create<EmptyFridge>()
                     .WithIdentity("EmptyFridgeJob", "Office")
                     .RequestRecovery()
                     .Build();
 
-                IJobDetail turnOffLightsJob = JobBuilder.Create<TurnOffLights>()
+                var turnOffLightsJob = JobBuilder.Create<TurnOffLights>()
                     .WithIdentity("TurnOffLightsJob", "Office")
                     .RequestRecovery()
                     .Build();
 
-                IJobDetail checkAliveJob = JobBuilder.Create<CheckAlive>()
+                var checkAliveJob = JobBuilder.Create<CheckAlive>()
                     .WithIdentity("CheckAliveJob", "Office")
                     .RequestRecovery()
                     .Build();
 
-                IJobDetail visitJob = JobBuilder.Create<Visit>()
+                var visitJob = JobBuilder.Create<Visit>()
                     .WithIdentity("VisitJob", "Office")
                     .RequestRecovery()
                     .Build();
@@ -74,7 +67,7 @@ namespace Examples
                     .Build();
 
                 // Periodic check every 10 seconds (Simple Trigger)
-                ITrigger checkAliveTrigger = TriggerBuilder.Create()
+                var checkAliveTrigger = TriggerBuilder.Create()
                     .WithIdentity("CheckAlive", "Office")
                     .StartAt(DateTime.UtcNow.AddSeconds(3))
                     .WithSimpleSchedule(x => x
@@ -82,7 +75,7 @@ namespace Examples
                         .RepeatForever())
                     .Build();
 
-                ITrigger visitTrigger = TriggerBuilder.Create()
+                var visitTrigger = TriggerBuilder.Create()
                     .WithIdentity("Visit", "Office")
                     .StartAt(DateTime.UtcNow.AddSeconds(3))
                     .Build();
