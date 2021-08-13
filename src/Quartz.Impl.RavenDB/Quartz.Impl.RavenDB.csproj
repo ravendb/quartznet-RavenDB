@@ -13,6 +13,7 @@
     <PackageLicenseUrl>http://www.apache.org/licenses/LICENSE-2.0.html</PackageLicenseUrl>
     <PackageProjectUrl>https://github.com/ravendb/quartznet-RavenDB</PackageProjectUrl>
     <PackageTags>RavenDB NoSQL JobStore Quartz net Quartz.net quartznet scheduler</PackageTags>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
