@@ -14,6 +14,7 @@
     <PackageProjectUrl>https://github.com/ravendb/quartznet-RavenDB</PackageProjectUrl>
     <PackageTags>RavenDB NoSQL JobStore Quartz net Quartz.net quartznet scheduler</PackageTags>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <LangVersion>8</LangVersion>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Quartz" Version="3.3.3" />
