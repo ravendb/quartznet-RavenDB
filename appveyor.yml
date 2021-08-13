@@ -16,4 +16,6 @@ before_build:
 - nuget restore .\src\
 build:
   project: $(APPVEYOR_BUILD_FOLDER)\src\Quartz.Impl.RavenDB.sln
+artifacts:
+- path: 'bin**\*.nupkg'
 test: off
