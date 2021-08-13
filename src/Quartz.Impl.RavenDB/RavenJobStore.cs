@@ -1,30 +1,29 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Linq;
-using System.Threading;
 using System.Configuration;
 using System.Data.Common;
+using System.Globalization;
 using System.Runtime.CompilerServices;
-using Quartz.Core;
-using Quartz.Spi;
-using Quartz.Simpl;
+using System.Threading;
 using System.Threading.Tasks;
-using Raven.Client.Documents.Linq;
+using Quartz.Core;
+using Quartz.Simpl;
+using Quartz.Spi;
 using Raven.Client.Documents;
+using Raven.Client.Documents.Linq;
 
 namespace Quartz.Impl.RavenDB
 {
-    /// <summary> 
-    /// An implementation of <see cref="IJobStore" /> to use ravenDB as a persistent Job Store.
-    /// Mostly based on RAMJobStore logic with changes to support persistent storage.
-    /// Provides an <see cref="IJob" />
-    /// and <see cref="ITrigger" /> storage mechanism for the
-    /// <see cref="QuartzScheduler" />'s use.
+    /// <summary>
+    ///     An implementation of <see cref="IJobStore" /> to use ravenDB as a persistent Job Store.
+    ///     Mostly based on RAMJobStore logic with changes to support persistent storage.
+    ///     Provides an <see cref="IJob" />
+    ///     and <see cref="ITrigger" /> storage mechanism for the
+    ///     <see cref="QuartzScheduler" />'s use.
     /// </summary>
     /// <remarks>
-    /// Storage of <see cref="IJob" /> s and <see cref="ITrigger" /> s should be keyed
-    /// on the combination of their name and group for uniqueness.
+    ///     Storage of <see cref="IJob" /> s and <see cref="ITrigger" /> s should be keyed
+    ///     on the combination of their name and group for uniqueness.
     /// </remarks>
     /// <seealso cref="QuartzScheduler" />
     /// <seealso cref="IJobStore" />
@@ -36,31 +35,22 @@ namespace Quartz.Impl.RavenDB
     /// <author>Iftah Ben Zaken</author>
     public partial class RavenJobStore : IJobStore
     {
-        private TimeSpan misfireThreshold = TimeSpan.FromSeconds(5);
-        private ISchedulerSignaler _signaler;
         private static long ftrCtr = SystemTime.UtcNow().Ticks;
 
-        public bool SupportsPersistence => true;
-        public long EstimatedTimeToReleaseAndAcquireTrigger => 100;
-        public bool Clustered => false;
+        public static string defaultConnectionString =
+            "Url=http://localhost:8080;DefaultDatabase=MyDatabaseName;ApiKey=YourKey";
 
-        public string InstanceId { get; set; }
-        public string InstanceName { get; set; }
-        public int ThreadPoolSize { get; set; }
-
-        public static string defaultConnectionString = "Url=http://localhost:8080;DefaultDatabase=MyDatabaseName;ApiKey=YourKey";
-        public static string Url { get; set; }
-        public static string DefaultDatabase { get; set; }
-        public static string ApiKey { get; set; }
+        private ISchedulerSignaler _signaler;
+        private TimeSpan misfireThreshold = TimeSpan.FromSeconds(5);
 
         public RavenJobStore()
         {
             var connectionStringSettings = ConfigurationManager.ConnectionStrings["quartznet-ravendb"];
             var stringBuilder = new DbConnectionStringBuilder
             {
-                ConnectionString = connectionStringSettings != null ?
-                    connectionStringSettings.ConnectionString :
-                    defaultConnectionString
+                ConnectionString = connectionStringSettings != null
+                    ? connectionStringSettings.ConnectionString
+                    : defaultConnectionString
             };
 
             Url = stringBuilder["Url"] as string;
@@ -70,6 +60,49 @@ namespace Quartz.Impl.RavenDB
             InstanceName = "UnitTestScheduler";
             InstanceId = "instance_two";
         }
+
+        public static string Url { get; set; }
+        public static string DefaultDatabase { get; set; }
+        public static string ApiKey { get; set; }
+
+        protected virtual DateTimeOffset MisfireTime
+        {
+            [MethodImpl(MethodImplOptions.Synchronized)]
+            get
+            {
+                var misfireTime = SystemTime.UtcNow();
+                if (MisfireThreshold > TimeSpan.Zero)
+                    misfireTime = misfireTime.AddMilliseconds(-1 * MisfireThreshold.TotalMilliseconds);
+
+                return misfireTime;
+            }
+        }
+
+        /// <summary>
+        ///     The time span by which a trigger must have missed its
+        ///     next-fire-time, in order for it to be considered "misfired" and thus
+        ///     have its misfire instruction applied.
+        /// </summary>
+        [TimeSpanParseRule(TimeSpanParseRule.Milliseconds)]
+        public virtual TimeSpan MisfireThreshold
+        {
+            [MethodImpl(MethodImplOptions.Synchronized)]
+            get => misfireThreshold;
+            [MethodImpl(MethodImplOptions.Synchronized)]
+            set
+            {
+                if (value.TotalMilliseconds < 1) throw new ArgumentException("MisfireThreshold must be larger than 0");
+                misfireThreshold = value;
+            }
+        }
+
+        public bool SupportsPersistence => true;
+        public long EstimatedTimeToReleaseAndAcquireTrigger => 100;
+        public bool Clustered => false;
+
+        public string InstanceId { get; set; }
+        public string InstanceName { get; set; }
+        public int ThreadPoolSize { get; set; }
 
         public async Task SetSchedulerState(SchedulerState state, CancellationToken cancellationToken)
         {
@@ -82,8 +115,8 @@ namespace Quartz.Impl.RavenDB
         }
 
         /// <summary>
-        /// Will recover any failed or misfired jobs and clean up the data store as
-        /// appropriate.
+        ///     Will recover any failed or misfired jobs and clean up the data store as
+        ///     appropriate.
         /// </summary>
         /// <exception cref="JobPersistenceException">Condition.</exception>
         protected virtual async Task RecoverSchedulerData(CancellationToken cancellationToken)
@@ -95,13 +128,15 @@ namespace Quartz.Impl.RavenDB
                 {
                     var queryResult = await session
                         .Query<Trigger>()
-                        .Where(t => (t.Scheduler == InstanceName) && (t.State == InternalTriggerState.Acquired || t.State == InternalTriggerState.Blocked))
+                        .Where(t => t.Scheduler == InstanceName && (t.State == InternalTriggerState.Acquired ||
+                                                                    t.State == InternalTriggerState.Blocked))
                         .ToListAsync(cancellationToken);
                     foreach (var trigger in queryResult)
                     {
                         var triggerToUpdate = await session.LoadAsync<Trigger>(trigger.Key, cancellationToken);
                         triggerToUpdate.State = InternalTriggerState.Waiting;
                     }
+
                     await session.SaveChangesAsync(cancellationToken);
                 }
 
@@ -112,23 +147,20 @@ namespace Quartz.Impl.RavenDB
                 {
                     var queryResultJobs = await session
                         .Query<Job>()
-                        .Where(j => (j.Scheduler == InstanceName) && j.RequestsRecovery)
+                        .Where(j => j.Scheduler == InstanceName && j.RequestsRecovery)
                         .ToListAsync(cancellationToken);
 
                     foreach (var job in queryResultJobs)
-                    {
-                        ((List<IOperableTrigger>)recoveringJobTriggers).AddRange(await GetTriggersForJob(new JobKey(job.Name, job.Group), cancellationToken));
-                    }
+                        ((List<IOperableTrigger>) recoveringJobTriggers).AddRange(
+                            await GetTriggersForJob(new JobKey(job.Name, job.Group), cancellationToken));
                 }
-                
-                foreach (IOperableTrigger trigger in recoveringJobTriggers)
-                {
+
+                foreach (var trigger in recoveringJobTriggers)
                     if (await CheckExists(trigger.JobKey))
                     {
                         trigger.ComputeFirstFireTimeUtc(null);
                         await StoreTrigger(trigger, true, cancellationToken);
                     }
-                }
 
                 // remove lingering 'complete' triggers...
                 IList<Trigger> triggersInStateComplete;
@@ -137,14 +169,12 @@ namespace Quartz.Impl.RavenDB
                 {
                     triggersInStateComplete = await session
                         .Query<Trigger>()
-                        .Where(t => (t.Scheduler == InstanceName) && (t.State == InternalTriggerState.Complete))
+                        .Where(t => t.Scheduler == InstanceName && t.State == InternalTriggerState.Complete)
                         .ToListAsync(cancellationToken);
                 }
 
                 foreach (var trigger in triggersInStateComplete)
-                {
                     await RemoveTrigger(new TriggerKey(trigger.Name, trigger.Group), cancellationToken);
-                }
 
                 using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
                 {
@@ -160,7 +190,7 @@ namespace Quartz.Impl.RavenDB
         }
 
         /// <summary>
-        /// Gets the fired trigger record id.
+        ///     Gets the fired trigger record id.
         /// </summary>
         /// <returns>The fired trigger record id.</returns>
         [MethodImpl(MethodImplOptions.Synchronized)]
@@ -171,8 +201,8 @@ namespace Quartz.Impl.RavenDB
         }
 
         /// <summary>
-        /// Clear (delete!) all scheduling data - all <see cref="IJob"/>s, <see cref="ITrigger" />s
-        /// <see cref="ICalendar" />s.
+        ///     Clear (delete!) all scheduling data - all <see cref="IJob" />s, <see cref="ITrigger" />s
+        ///     <see cref="ICalendar" />s.
         /// </summary>
         /// <remarks>
         /// </remarks>
@@ -190,14 +220,12 @@ namespace Quartz.Impl.RavenDB
                 var sched = await session.LoadAsync<Scheduler>(InstanceName, cancellationToken);
 
                 if (sched is null)
-                {
-                    throw new NullReferenceException(string.Format(CultureInfo.InvariantCulture, "Scheduler with instance name '{0}' is null", InstanceName));
-                }
+                    throw new NullReferenceException(string.Format(CultureInfo.InvariantCulture,
+                        "Scheduler with instance name '{0}' is null", InstanceName));
 
                 if (sched.Calendars is null)
-                {
-                    throw new NullReferenceException(string.Format(CultureInfo.InvariantCulture, "Calendar collection in '{0}' is null", InstanceName));
-                }
+                    throw new NullReferenceException(string.Format(CultureInfo.InvariantCulture,
+                        "Calendar collection in '{0}' is null", InstanceName));
 
                 return sched.Calendars;
             }
@@ -219,41 +247,19 @@ namespace Quartz.Impl.RavenDB
             }
         }
 
-        protected virtual DateTimeOffset MisfireTime
-        {
-            [MethodImpl(MethodImplOptions.Synchronized)]
-            get
-            {
-                DateTimeOffset misfireTime = SystemTime.UtcNow();
-                if (MisfireThreshold > TimeSpan.Zero)
-                {
-                    misfireTime = misfireTime.AddMilliseconds(-1 * MisfireThreshold.TotalMilliseconds);
-                }
-
-                return misfireTime;
-            }
-        }
-
         protected virtual async Task<bool> ApplyMisfire(Trigger trigger, CancellationToken cancellationToken)
         {
-            DateTimeOffset misfireTime = SystemTime.UtcNow();
+            var misfireTime = SystemTime.UtcNow();
             if (MisfireThreshold > TimeSpan.Zero)
-            {
                 misfireTime = misfireTime.AddMilliseconds(-1 * MisfireThreshold.TotalMilliseconds);
-            }
 
-            DateTimeOffset? tnft = trigger.NextFireTimeUtc;
+            var tnft = trigger.NextFireTimeUtc;
             if (!tnft.HasValue || tnft.Value > misfireTime
-                || trigger.MisfireInstruction == MisfireInstruction.IgnoreMisfirePolicy)
-            {
+                               || trigger.MisfireInstruction == MisfireInstruction.IgnoreMisfirePolicy)
                 return false;
-            }
 
             ICalendar cal = null;
-            if (trigger.CalendarName != null)
-            {
-                cal = await RetrieveCalendar(trigger.CalendarName, cancellationToken);
-            }
+            if (trigger.CalendarName != null) cal = await RetrieveCalendar(trigger.CalendarName, cancellationToken);
 
             // Deserialize to an IOperableTrigger to apply original methods on the trigger
             var trig = trigger.Deserialize();
@@ -265,7 +271,6 @@ namespace Quartz.Impl.RavenDB
             {
                 await _signaler.NotifySchedulerListenersFinalized(trig, cancellationToken);
                 trigger.State = InternalTriggerState.Complete;
-
             }
             else if (tnft.Equals(trig.GetNextFireTimeUtc()))
             {
@@ -275,7 +280,8 @@ namespace Quartz.Impl.RavenDB
             return true;
         }
 
-        protected virtual async Task SetAllTriggersOfJobToState(JobKey jobKey, InternalTriggerState state, CancellationToken cancellationToken)
+        protected virtual async Task SetAllTriggersOfJobToState(JobKey jobKey, InternalTriggerState state,
+            CancellationToken cancellationToken)
         {
             using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
             {
@@ -289,27 +295,6 @@ namespace Quartz.Impl.RavenDB
                 }
 
                 await session.SaveChangesAsync(cancellationToken);
-            }
-        }
-
-        /// <summary> 
-        /// The time span by which a trigger must have missed its
-        /// next-fire-time, in order for it to be considered "misfired" and thus
-        /// have its misfire instruction applied.
-        /// </summary>
-        [TimeSpanParseRule(TimeSpanParseRule.Milliseconds)]
-        public virtual TimeSpan MisfireThreshold
-        {
-            [MethodImpl(MethodImplOptions.Synchronized)]
-            get { return misfireThreshold; }
-            [MethodImpl(MethodImplOptions.Synchronized)]
-            set
-            {
-                if (value.TotalMilliseconds < 1)
-                {
-                    throw new ArgumentException("MisfireThreshold must be larger than 0");
-                }
-                misfireThreshold = value;
             }
         }
     }
