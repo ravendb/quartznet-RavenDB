@@ -4,8 +4,9 @@ using Quartz.Util;
 
 namespace Quartz.Impl.RavenDB
 {
-    public static class IPropertyConfigurerExtensions
+    public static class RavenDbProviderExtensions
     {
+        /*
         /// <summary>
         ///     Use <see cref="RavenJobStore"/> as persistent <see cref="IJobStore"/>.
         /// </summary>
@@ -15,6 +16,15 @@ namespace Quartz.Impl.RavenDB
                 typeof(RavenJobStore).AssemblyQualifiedNameWithoutVersion());
             options?.Invoke(new RavenDbStoreOptions(builder));
             return builder;
+        }
+        */
+
+        public static void UseRavenDb(this SchedulerBuilder.PersistentStoreOptions options,
+            Action<RavenDbProviderOptions> config = null)
+        {
+            options.SetProperty(StdSchedulerFactory.PropertyJobStoreType,
+                typeof(RavenJobStore).AssemblyQualifiedNameWithoutVersion());
+            config?.Invoke(new RavenDbProviderOptions(options));
         }
     }
 }

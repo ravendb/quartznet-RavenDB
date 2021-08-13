@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Quartz.Impl.RavenDB.Tests",
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Examples", "Examples\Examples.csproj", "{A34B5936-B04D-4673-8F0C-7F3583A8DA96}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Quartz.Impl.RavenDB.WorkerExample", "Quartz.Impl.RavenDB.WorkerExample\Quartz.Impl.RavenDB.WorkerExample.csproj", "{B3EF2ADA-2D6A-4C4B-8266-1B7C8EC1F848}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -25,6 +27,10 @@ Global
 		{A34B5936-B04D-4673-8F0C-7F3583A8DA96}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A34B5936-B04D-4673-8F0C-7F3583A8DA96}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A34B5936-B04D-4673-8F0C-7F3583A8DA96}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B3EF2ADA-2D6A-4C4B-8266-1B7C8EC1F848}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B3EF2ADA-2D6A-4C4B-8266-1B7C8EC1F848}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B3EF2ADA-2D6A-4C4B-8266-1B7C8EC1F848}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B3EF2ADA-2D6A-4C4B-8266-1B7C8EC1F848}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
