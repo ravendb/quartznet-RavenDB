@@ -17,12 +17,13 @@ namespace Quartz.Impl.RavenDB
 {
     public partial class RavenJobStore
     {
-        public async Task Initialize(ITypeLoadHelper loadHelper, ISchedulerSignaler signaler, CancellationToken cancellationToken = default)
+        public Task Initialize(ITypeLoadHelper loadHelper, ISchedulerSignaler signaler, CancellationToken cancellationToken = default)
         {
             _signaler = signaler;
 
-            await new TriggerIndex().ExecuteAsync(DocumentStoreHolder.Store, token: cancellationToken);
-            await new JobIndex().ExecuteAsync(DocumentStoreHolder.Store, token: cancellationToken);
+            //await new TriggerIndex().ExecuteAsync(DocumentStoreHolder.Store, token: cancellationToken);
+            //await new JobIndex().ExecuteAsync(DocumentStoreHolder.Store, token: cancellationToken);
+            return Task.CompletedTask;
         }
 
         public async Task SchedulerStarted(CancellationToken cancellationToken = default)
