@@ -2,7 +2,7 @@
 {
     public class RavenDbStoreOptions : PropertiesHolder
     {
-        protected internal RavenDbStoreOptions(SchedulerBuilder parent) : base(parent)
+        protected internal RavenDbStoreOptions(IPropertyConfigurer config) : base(config)
         {
         }
     }

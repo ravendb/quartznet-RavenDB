@@ -5,7 +5,7 @@ namespace Quartz.Impl.RavenDB
 {
     public static class SchedulerBuilderExtensions
     {
-        public static SchedulerBuilder UseRavenDbStore(this SchedulerBuilder builder, Action<RavenDbStoreOptions>? options = null)
+        public static IPropertyConfigurer UseRavenDbStore(this IPropertyConfigurer builder, Action<RavenDbStoreOptions>? options = null)
         {
             builder.SetProperty(StdSchedulerFactory.PropertyJobStoreType,
                 typeof(RavenJobStore).AssemblyQualifiedNameWithoutVersion());
