@@ -17,7 +17,7 @@ namespace Quartz.Impl.RavenDB
     {
         public async Task Initialize(ITypeLoadHelper loadHelper, ISchedulerSignaler signaler, CancellationToken cancellationToken = default)
         {
-            this.signaler = signaler;
+            _signaler = signaler;
 
             await new TriggerIndex().ExecuteAsync(DocumentStoreHolder.Store, token: cancellationToken);
             await new JobIndex().ExecuteAsync(DocumentStoreHolder.Store, token: cancellationToken);
@@ -66,8 +66,8 @@ namespace Quartz.Impl.RavenDB
 
         public async Task StoreJobAndTrigger(IJobDetail newJob, IOperableTrigger newTrigger, CancellationToken cancellationToken = default)
         {
-            await StoreJob(newJob, true);
-            await StoreTrigger(newTrigger, true);
+            await StoreJob(newJob, true, cancellationToken);
+            await StoreTrigger(newTrigger, true, cancellationToken);
         }
 
         public async Task<bool> IsJobGroupPaused(string groupName, CancellationToken cancellationToken = default)
@@ -260,7 +260,7 @@ namespace Quartz.Impl.RavenDB
                 if (!hasMoreTriggers && !job.Durable)
                 {
                     session.Delete(job.Key.GetDatabaseId());
-                    await signaler.NotifySchedulerListenersJobDeleted(job.Key, cancellationToken);
+                    await _signaler.NotifySchedulerListenersJobDeleted(job.Key, cancellationToken);
                 }
 
                 await session.SaveChangesAsync(cancellationToken);
@@ -318,9 +318,8 @@ namespace Quartz.Impl.RavenDB
                 {
                     answer = sched.Calendars.ContainsKey(calName);
                 }
-                catch (ArgumentNullException argumentNullException)
+                catch (ArgumentNullException)
                 {
-                    Log.Error("Calendars collection is null.", argumentNullException);
                     answer = false;
                 }
             }
@@ -1002,7 +1001,7 @@ namespace Quartz.Impl.RavenDB
                             }
                         }
 
-                        signaler.SignalSchedulingChange(null);
+                        _signaler.SignalSchedulingChange(null);
                     }
                 }
                 else
@@ -1035,28 +1034,28 @@ namespace Quartz.Impl.RavenDB
                         else
                         {
                             await RemoveTrigger(trigger.Key, cancellationToken);
-                            signaler.SignalSchedulingChange(null);
+                            _signaler.SignalSchedulingChange(null);
                         }
                     }
                     else if (triggerInstCode == SchedulerInstruction.SetTriggerComplete)
                     {
                         entry.State = InternalTriggerState.Complete;
-                        signaler.SignalSchedulingChange(null);
+                        _signaler.SignalSchedulingChange(null);
                     }
                     else if (triggerInstCode == SchedulerInstruction.SetTriggerError)
                     {
                         entry.State = InternalTriggerState.Error;
-                        signaler.SignalSchedulingChange(null);
+                        _signaler.SignalSchedulingChange(null);
                     }
                     else if (triggerInstCode == SchedulerInstruction.SetAllJobTriggersError)
                     {
                         await SetAllTriggersOfJobToState(trigger.JobKey, InternalTriggerState.Error, cancellationToken);
-                        signaler.SignalSchedulingChange(null);
+                        _signaler.SignalSchedulingChange(null);
                     }
                     else if (triggerInstCode == SchedulerInstruction.SetAllJobTriggersComplete)
                     {
                         await SetAllTriggersOfJobToState(trigger.JobKey, InternalTriggerState.Complete, cancellationToken);
-                        signaler.SignalSchedulingChange(null);
+                        _signaler.SignalSchedulingChange(null);
                     }
                 }
                 await session.SaveChangesAsync(cancellationToken);

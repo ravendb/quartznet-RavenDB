@@ -14,16 +14,7 @@
     <PackageProjectUrl>https://github.com/ravendb/quartznet-RavenDB</PackageProjectUrl>
     <PackageTags>RavenDB NoSQL JobStore Quartz net Quartz.net quartznet scheduler</PackageTags>
   </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
-    <DebugType>full</DebugType>
-  </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
-    <DebugType>pdbonly</DebugType>
-    <DocumentationFile>bin\$(Configuration)\Quartz.Impl.RavenDB.XML</DocumentationFile>
-  </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Common.Logging" Version="3.4.1" />
-    <PackageReference Include="Common.Logging.Core" Version="3.4.1" />
     <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
     <PackageReference Include="Quartz" Version="3.3.3" />
     <PackageReference Include="RavenDB.Client" Version="5.2.1" />

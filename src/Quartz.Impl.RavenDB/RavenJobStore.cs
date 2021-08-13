@@ -6,9 +6,6 @@ using System.Threading;
 using System.Configuration;
 using System.Data.Common;
 using System.Runtime.CompilerServices;
-
-using Common.Logging;
-
 using Quartz.Core;
 using Quartz.Spi;
 using Quartz.Simpl;
@@ -40,7 +37,7 @@ namespace Quartz.Impl.RavenDB
     public partial class RavenJobStore : IJobStore
     {
         private TimeSpan misfireThreshold = TimeSpan.FromSeconds(5);
-        private ISchedulerSignaler signaler;
+        private ISchedulerSignaler _signaler;
         private static long ftrCtr = SystemTime.UtcNow().Ticks;
 
         public bool SupportsPersistence => true;
@@ -55,12 +52,9 @@ namespace Quartz.Impl.RavenDB
         public static string Url { get; set; }
         public static string DefaultDatabase { get; set; }
         public static string ApiKey { get; set; }
-        protected ILog Log { get; }
 
         public RavenJobStore()
         {
-            Log = LogManager.GetLogger(GetType());
-
             var connectionStringSettings = ConfigurationManager.ConnectionStrings["quartznet-ravendb"];
             var stringBuilder = new DbConnectionStringBuilder
             {
@@ -96,8 +90,6 @@ namespace Quartz.Impl.RavenDB
         {
             try
             {
-                Log.Info("Trying to recover persisted scheduler data for" + InstanceName);
-
                 // update inconsistent states
                 using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
                 {
@@ -112,8 +104,6 @@ namespace Quartz.Impl.RavenDB
                     }
                     await session.SaveChangesAsync(cancellationToken);
                 }
-
-                Log.Info("Freed triggers from 'acquired' / 'blocked' state.");
 
                 // recover jobs marked for recovery that were not fully executed
                 IList<IOperableTrigger> recoveringJobTriggers = new List<IOperableTrigger>();
@@ -130,10 +120,7 @@ namespace Quartz.Impl.RavenDB
                         ((List<IOperableTrigger>)recoveringJobTriggers).AddRange(await GetTriggersForJob(new JobKey(job.Name, job.Group), cancellationToken));
                     }
                 }
-
-                Log.Info("Recovering " + recoveringJobTriggers.Count +
-                         " jobs that were in-progress at the time of the last shut-down.");
-
+                
                 foreach (IOperableTrigger trigger in recoveringJobTriggers)
                 {
                     if (await CheckExists(trigger.JobKey))
@@ -142,10 +129,8 @@ namespace Quartz.Impl.RavenDB
                         await StoreTrigger(trigger, true, cancellationToken);
                     }
                 }
-                Log.Info("Recovery complete.");
 
                 // remove lingering 'complete' triggers...
-                Log.Info("Removing 'complete' triggers...");
                 IList<Trigger> triggersInStateComplete;
 
                 using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
@@ -272,13 +257,13 @@ namespace Quartz.Impl.RavenDB
 
             // Deserialize to an IOperableTrigger to apply original methods on the trigger
             var trig = trigger.Deserialize();
-            await signaler.NotifyTriggerListenersMisfired(trig, cancellationToken);
+            await _signaler.NotifyTriggerListenersMisfired(trig, cancellationToken);
             trig.UpdateAfterMisfire(cal);
             trigger.UpdateFireTimes(trig);
 
             if (!trig.GetNextFireTimeUtc().HasValue)
             {
-                await signaler.NotifySchedulerListenersFinalized(trig, cancellationToken);
+                await _signaler.NotifySchedulerListenersFinalized(trig, cancellationToken);
                 trigger.State = InternalTriggerState.Complete;
 
             }
