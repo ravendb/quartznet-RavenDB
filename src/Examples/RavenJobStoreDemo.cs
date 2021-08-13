@@ -88,10 +88,10 @@ namespace Examples
                     .Build();
 
 
-                //scheduler.ScheduleJob(checkAliveJob, checkAliveTrigger);
-                //scheduler.ScheduleJob(emptyFridgeJob, emptyFridgeTrigger);
-                //scheduler.ScheduleJob(turnOffLightsJob, turnOffLightsTrigger);
-                //scheduler.ScheduleJob(visitJob, visitTrigger);
+                scheduler.ScheduleJob(checkAliveJob, checkAliveTrigger);
+                scheduler.ScheduleJob(emptyFridgeJob, emptyFridgeTrigger);
+                scheduler.ScheduleJob(turnOffLightsJob, turnOffLightsTrigger);
+                scheduler.ScheduleJob(visitJob, visitTrigger);
 
                 // some sleep to show what's happening
                 Thread.Sleep(TimeSpan.FromSeconds(600));
