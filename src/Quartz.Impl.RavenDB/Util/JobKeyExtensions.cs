@@ -4,7 +4,7 @@
     {
         public static string GetDatabaseId(this JobKey jobKey)
         {
-            return jobKey.Name + "/" + jobKey.Group;
+            return $"{jobKey.Name}/{jobKey.Group}";
         }
     }
 }

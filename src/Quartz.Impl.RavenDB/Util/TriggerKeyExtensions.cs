@@ -4,7 +4,7 @@
     {
         public static string GetDatabaseId(this TriggerKey triggerKey)
         {
-            return triggerKey.Name + "/" + triggerKey.Group;
+            return $"{triggerKey.Name}/{triggerKey.Group}";
         }
     }
 }

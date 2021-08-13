@@ -5,15 +5,15 @@ namespace Quartz.Impl.RavenDB
 {
     public class DocumentStoreHolder
     {
-        private static readonly Lazy<IDocumentStore> store = new Lazy<IDocumentStore>(CreateStore);
+        private static readonly Lazy<IDocumentStore> LazyStore = new Lazy<IDocumentStore>(CreateStore);
 
-        public static IDocumentStore Store => store.Value;
+        public static IDocumentStore Store => LazyStore.Value;
 
         private static IDocumentStore CreateStore()
         {
-            var documentStore = new DocumentStore()
+            var documentStore = new DocumentStore
             {
-                Urls = new[] { RavenJobStore.Url },
+                Urls = new[] {RavenJobStore.Url},
                 Database = RavenJobStore.DefaultDatabase
             };
 
