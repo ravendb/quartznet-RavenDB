@@ -44,7 +44,7 @@ namespace Quartz.Impl.RavenDB
                 // Scheduler with same instance name already exists, recover persistent data
                 try
                 {
-                    await RecoverSchedulerData(session, cancellationToken);
+                    await RecoverSchedulerData(session, cancellationToken).ConfigureAwait(false);
                 }
                 catch (SchedulerException se)
                 {
@@ -55,24 +55,24 @@ namespace Quartz.Impl.RavenDB
 
         public async Task SchedulerPaused(CancellationToken cancellationToken = default)
         {
-            await SetSchedulerState(SchedulerState.Paused, cancellationToken);
+            await SetSchedulerState(SchedulerState.Paused, cancellationToken).ConfigureAwait(false);
         }
 
         public async Task SchedulerResumed(CancellationToken cancellationToken = default)
         {
-            await SetSchedulerState(SchedulerState.Resumed, cancellationToken);
+            await SetSchedulerState(SchedulerState.Resumed, cancellationToken).ConfigureAwait(false);
         }
 
         public async Task Shutdown(CancellationToken cancellationToken = default)
         {
-            await SetSchedulerState(SchedulerState.Shutdown, cancellationToken);
+            await SetSchedulerState(SchedulerState.Shutdown, cancellationToken).ConfigureAwait(false);
         }
 
         public async Task StoreJobAndTrigger(IJobDetail newJob, IOperableTrigger newTrigger,
             CancellationToken cancellationToken = default)
         {
-            await StoreJob(newJob, true, cancellationToken);
-            await StoreTrigger(newTrigger, true, cancellationToken);
+            await StoreJob(newJob, true, cancellationToken).ConfigureAwait(false);
+            await StoreTrigger(newTrigger, true, cancellationToken).ConfigureAwait(false);
         }
 
         public async Task<bool> IsJobGroupPaused(string groupName, CancellationToken cancellationToken = default)
@@ -86,7 +86,7 @@ namespace Quartz.Impl.RavenDB
 
         public async Task<bool> IsTriggerGroupPaused(string groupName, CancellationToken cancellationToken = default)
         {
-            return (await GetPausedTriggerGroups(cancellationToken)).Contains(groupName);
+            return (await GetPausedTriggerGroups(cancellationToken).ConfigureAwait(false)).Contains(groupName);
         }
 
         public async Task StoreJob(IJobDetail newJob, bool replaceExisting,
@@ -123,14 +123,18 @@ namespace Quartz.Impl.RavenDB
                         if (!(trig is IOperableTrigger operTrig)) continue;
                         var trigger = new Trigger(operTrig, InstanceName);
 
-                        if ((await GetPausedTriggerGroups(cancellationToken)).Contains(operTrig.Key.Group) ||
-                            (await GetPausedJobGroups(cancellationToken)).Contains(operTrig.JobKey.Group))
+                        if ((await GetPausedTriggerGroups(cancellationToken).ConfigureAwait(false)).Contains(
+                                operTrig.Key.Group) ||
+                            (await GetPausedJobGroups(cancellationToken).ConfigureAwait(false)).Contains(operTrig.JobKey
+                                .Group))
                         {
                             trigger.State = InternalTriggerState.Paused;
-                            if ((await GetBlockedJobs(cancellationToken)).Contains(operTrig.GetJobDatabaseId()))
+                            if ((await GetBlockedJobs(cancellationToken).ConfigureAwait(false)).Contains(
+                                operTrig.GetJobDatabaseId()))
                                 trigger.State = InternalTriggerState.PausedAndBlocked;
                         }
-                        else if ((await GetBlockedJobs(cancellationToken)).Contains(operTrig.GetJobDatabaseId()))
+                        else if ((await GetBlockedJobs(cancellationToken).ConfigureAwait(false)).Contains(
+                            operTrig.GetJobDatabaseId()))
                         {
                             trigger.State = InternalTriggerState.Blocked;
                         }
@@ -280,11 +284,11 @@ namespace Quartz.Impl.RavenDB
         public async Task<bool> ReplaceTrigger(TriggerKey triggerKey, IOperableTrigger newTrigger,
             CancellationToken cancellationToken = default)
         {
-            if (!await CheckExists(triggerKey, cancellationToken)) return false;
+            if (!await CheckExists(triggerKey, cancellationToken).ConfigureAwait(false)) return false;
 
-            var wasRemoved = await RemoveTrigger(triggerKey, cancellationToken);
+            var wasRemoved = await RemoveTrigger(triggerKey, cancellationToken).ConfigureAwait(false);
 
-            if (wasRemoved) await StoreTrigger(newTrigger, true, cancellationToken);
+            if (wasRemoved) await StoreTrigger(newTrigger, true, cancellationToken).ConfigureAwait(false);
 
             return wasRemoved;
         }
@@ -368,7 +372,7 @@ namespace Quartz.Impl.RavenDB
                     throw new NullReferenceException(string.Format(CultureInfo.InvariantCulture,
                         "Scheduler with instance name '{0}' is null", InstanceName));
 
-                if (await CalendarExists(name, cancellationToken) && !replaceExisting)
+                if (await CalendarExists(name, cancellationToken).ConfigureAwait(false) && !replaceExisting)
                     throw new ObjectAlreadyExistsException(string.Format(CultureInfo.InvariantCulture,
                         "Calendar with name '{0}' already exists.", name));
 
@@ -403,12 +407,9 @@ namespace Quartz.Impl.RavenDB
 
         public async Task<bool> RemoveCalendar(string calName, CancellationToken cancellationToken = default)
         {
-            if (await RetrieveCalendar(calName, cancellationToken) is null)
-            {
-                return false;
-            }
+            if (await RetrieveCalendar(calName, cancellationToken).ConfigureAwait(false) is null) return false;
 
-            var calCollection = await RetrieveCalendarCollection(cancellationToken);
+            var calCollection = await RetrieveCalendarCollection(cancellationToken).ConfigureAwait(false);
 
             calCollection.Remove(calName);
 
@@ -424,7 +425,7 @@ namespace Quartz.Impl.RavenDB
 
         public async Task<ICalendar> RetrieveCalendar(string calName, CancellationToken cancellationToken = default)
         {
-            var callCollection = await RetrieveCalendarCollection(cancellationToken);
+            var callCollection = await RetrieveCalendarCollection(cancellationToken).ConfigureAwait(false);
 
             return callCollection.ContainsKey(calName) ? callCollection[calName] : null;
         }
@@ -447,7 +448,7 @@ namespace Quartz.Impl.RavenDB
 
         public async Task<int> GetNumberOfCalendars(CancellationToken cancellationToken = default)
         {
-            return (await RetrieveCalendarCollection(cancellationToken)).Count;
+            return (await RetrieveCalendarCollection(cancellationToken).ConfigureAwait(false)).Count;
         }
 
         public async Task<IReadOnlyCollection<JobKey>> GetJobKeys(GroupMatcher<JobKey> matcher,
@@ -521,7 +522,7 @@ namespace Quartz.Impl.RavenDB
 
         public async Task<IReadOnlyCollection<string>> GetCalendarNames(CancellationToken cancellationToken = default)
         {
-            return (await RetrieveCalendarCollection(cancellationToken)).Keys.ToList();
+            return (await RetrieveCalendarCollection(cancellationToken).ConfigureAwait(false)).Keys.ToList();
         }
 
         public async Task<IReadOnlyCollection<IOperableTrigger>> GetTriggersForJob(JobKey jobKey,
@@ -598,11 +599,11 @@ namespace Quartz.Impl.RavenDB
         {
             var pausedGroups = new HashSet<string>();
 
-            var triggerKeysForMatchedGroup = await GetTriggerKeys(matcher, cancellationToken);
+            var triggerKeysForMatchedGroup = await GetTriggerKeys(matcher, cancellationToken).ConfigureAwait(false);
 
             foreach (var triggerKey in triggerKeysForMatchedGroup)
             {
-                await PauseTrigger(triggerKey, cancellationToken);
+                await PauseTrigger(triggerKey, cancellationToken).ConfigureAwait(false);
                 pausedGroups.Add(triggerKey.Group);
             }
 
@@ -611,9 +612,10 @@ namespace Quartz.Impl.RavenDB
 
         public async Task PauseJob(JobKey jobKey, CancellationToken cancellationToken = default)
         {
-            var triggersForJob = await GetTriggersForJob(jobKey, cancellationToken);
+            var triggersForJob = await GetTriggersForJob(jobKey, cancellationToken).ConfigureAwait(false);
 
-            foreach (var trigger in triggersForJob) await PauseTrigger(trigger.Key, cancellationToken);
+            foreach (var trigger in triggersForJob)
+                await PauseTrigger(trigger.Key, cancellationToken).ConfigureAwait(false);
         }
 
         public async Task<IReadOnlyCollection<string>> PauseJobs(GroupMatcher<JobKey> matcher,
