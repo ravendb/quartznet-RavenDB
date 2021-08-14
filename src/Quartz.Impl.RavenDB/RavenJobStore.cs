@@ -215,12 +215,6 @@ namespace Quartz.Impl.RavenDB
             return scheduler.Calendars;
         }
 
-        public async Task<ISet<string>> GetPausedJobGroups(CancellationToken cancellationToken)
-        {
-            using var session = Store.OpenAsyncSession();
-            return (await session.LoadAsync<Scheduler>(InstanceName, cancellationToken)).PausedJobGroups;
-        }
-
         protected virtual async Task<bool> ApplyMisfire(Trigger trigger, CancellationToken cancellationToken)
         {
             var misfireTime = SystemTime.UtcNow();

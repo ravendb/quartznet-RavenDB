@@ -133,21 +133,27 @@ namespace Quartz.Impl.RavenDB
                 await bulkInsert.StoreAsync(new Job(pair.Key, InstanceName), pair.Key.Key.GetDatabaseId());
 
                 // Storing all triggers for the current job
-                foreach (var trig in pair.Value)
+                foreach (var orig in pair.Value.Where(t => t.GetType() == typeof(IOperableTrigger))
+                    .Cast<IOperableTrigger>())
                 {
-                    if (!(trig is IOperableTrigger operTrig)) continue;
-                    var trigger = new Trigger(operTrig, InstanceName);
+                    var trigger = new Trigger(orig, InstanceName);
 
-                    if ((await GetPausedTriggerGroups(cancellationToken).ConfigureAwait(false)).Contains(
-                            operTrig.Key.Group) ||
-                        (await GetPausedJobGroups(cancellationToken).ConfigureAwait(false)).Contains(operTrig.JobKey
-                            .Group))
+                    var isInPausedTriggerGroup = await session
+                        .Query<Trigger>()
+                        .Where(t => (
+                                        t.State == InternalTriggerState.Paused ||
+                                        t.State == InternalTriggerState.PausedAndBlocked
+                                    )
+                                    && Equals(t.Group, orig.Key.Group))
+                        .AnyAsync(cancellationToken);
+
+                    if (isInPausedTriggerGroup || scheduler.PausedJobGroups.Contains(orig.JobKey.Group))
                     {
                         trigger.State = InternalTriggerState.Paused;
-                        if (scheduler.BlockedJobs.Contains(operTrig.GetJobDatabaseId()))
+                        if (scheduler.BlockedJobs.Contains(orig.GetJobDatabaseId()))
                             trigger.State = InternalTriggerState.PausedAndBlocked;
                     }
-                    else if (scheduler.BlockedJobs.Contains(operTrig.GetJobDatabaseId()))
+                    else if (scheduler.BlockedJobs.Contains(orig.GetJobDatabaseId()))
                     {
                         trigger.State = InternalTriggerState.Blocked;
                     }
