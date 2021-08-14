@@ -41,27 +41,26 @@ namespace Quartz.Impl.RavenDB
 
         public async Task SchedulerStarted(CancellationToken cancellationToken = default)
         {
-            using (var session = Store.OpenAsyncSession())
+            using var session = Store.OpenAsyncSession();
+
+            var exists = await session.Advanced.ExistsAsync(InstanceName, cancellationToken);
+
+            if (!exists)
             {
-                var exists = await session.Advanced.ExistsAsync(InstanceName, cancellationToken);
+                var scheduler = new Scheduler() { InstanceName = InstanceName };
+                await session.StoreAsync(scheduler, InstanceName, cancellationToken);
+                await session.SaveChangesAsync(cancellationToken);
+                return;
+            }
 
-                if (!exists)
-                {
-                    var scheduler = new Scheduler() { InstanceName = InstanceName };
-                    await session.StoreAsync(scheduler, InstanceName, cancellationToken);
-                    await session.SaveChangesAsync(cancellationToken);
-                    return;
-                }
-
-                // Scheduler with same instance name already exists, recover persistent data
-                try
-                {
-                    await RecoverSchedulerData(session, cancellationToken).ConfigureAwait(false);
-                }
-                catch (SchedulerException se)
-                {
-                    throw new SchedulerConfigException("Failure occurred during job recovery.", se);
-                }
+            // Scheduler with same instance name already exists, recover persistent data
+            try
+            {
+                await RecoverSchedulerData(session, cancellationToken).ConfigureAwait(false);
+            }
+            catch (SchedulerException se)
+            {
+                throw new SchedulerConfigException("Failure occurred during job recovery.", se);
             }
         }
 
@@ -89,11 +88,14 @@ namespace Quartz.Impl.RavenDB
 
         public async Task<bool> IsJobGroupPaused(string groupName, CancellationToken cancellationToken = default)
         {
-            using (var session = Store.OpenAsyncSession())
-            {
-                var scheduler = await session.LoadAsync<Scheduler>(InstanceName, cancellationToken);
-                return scheduler.PausedJobGroups.Contains(groupName);
-            }
+            using var session = Store.OpenAsyncSession();
+
+            return await session
+                .Query<Scheduler>()
+                .Where(s =>
+                    Equals(s.InstanceName, InstanceName) &&
+                    s.PausedJobGroups.Contains(groupName))
+                .AnyAsync(cancellationToken);
         }
 
         public async Task<bool> IsTriggerGroupPaused(string groupName, CancellationToken cancellationToken = default)
