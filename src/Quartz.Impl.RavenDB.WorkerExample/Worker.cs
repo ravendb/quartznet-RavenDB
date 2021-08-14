@@ -1,6 +1,4 @@
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
@@ -12,6 +10,8 @@ namespace Quartz.Impl.RavenDB.WorkerExample
     {
         private readonly ILogger<Worker> _logger;
 
+        private readonly IScheduler _scheduler;
+
         public Worker(ILogger<Worker> logger)
         {
             _logger = logger;
@@ -22,7 +22,10 @@ namespace Quartz.Impl.RavenDB.WorkerExample
             while (!stoppingToken.IsCancellationRequested)
             {
                 _logger.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
-                await Task.Delay(1000, stoppingToken);
+
+
+
+                await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
             }
         }
     }

@@ -8,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
 using Raven.Client.Documents.Operations;
@@ -22,14 +23,25 @@ namespace Quartz.Impl.RavenDB
         {
             _signaler = signaler;
 
-            //await new TriggerIndex().ExecuteAsync(DocumentStoreHolder.Store, token: cancellationToken);
-            //await new JobIndex().ExecuteAsync(DocumentStoreHolder.Store, token: cancellationToken);
+            Store = new DocumentStore
+            {
+                Urls = _urls,
+                Database = Database
+            };
+
+            if (!string.IsNullOrEmpty(CertPath))
+                ((DocumentStore) Store).Certificate = new X509Certificate2(CertPath, CertPass);
+            
+            Store.Initialize();
+
+            //await new TriggerIndex().ExecuteAsync(Store, token: cancellationToken);
+            //await new JobIndex().ExecuteAsync(Store, token: cancellationToken);
             return Task.CompletedTask;
         }
 
         public async Task SchedulerStarted(CancellationToken cancellationToken = default)
         {
-            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+            using (var session = Store.OpenAsyncSession())
             {
                 var exists = await session.Advanced.ExistsAsync(InstanceName, cancellationToken);
 
@@ -77,7 +89,7 @@ namespace Quartz.Impl.RavenDB
 
         public async Task<bool> IsJobGroupPaused(string groupName, CancellationToken cancellationToken = default)
         {
-            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+            using (var session = Store.OpenAsyncSession())
             {
                 var scheduler = await session.LoadAsync<Scheduler>(InstanceName, cancellationToken);
                 return scheduler.PausedJobGroups.Contains(groupName);
@@ -92,7 +104,7 @@ namespace Quartz.Impl.RavenDB
         public async Task StoreJob(IJobDetail newJob, bool replaceExisting,
             CancellationToken cancellationToken = default)
         {
-            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+            using (var session = Store.OpenAsyncSession())
             {
                 if (await session.Advanced.ExistsAsync(newJob.Key.GetDatabaseId(), cancellationToken))
                     if (!replaceExisting)
@@ -110,7 +122,7 @@ namespace Quartz.Impl.RavenDB
             IReadOnlyDictionary<IJobDetail, IReadOnlyCollection<ITrigger>> triggersAndJobs, bool replace,
             CancellationToken cancellationToken = default)
         {
-            using (var bulkInsert = DocumentStoreHolder.Store.BulkInsert(token: cancellationToken))
+            using (var bulkInsert = Store.BulkInsert(token: cancellationToken))
             {
                 foreach (var pair in triggersAndJobs)
                 {
@@ -148,7 +160,7 @@ namespace Quartz.Impl.RavenDB
 
         public async Task<bool> RemoveJob(JobKey jobKey, CancellationToken cancellationToken = default)
         {
-            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+            using (var session = Store.OpenAsyncSession())
             {
                 if (!await session.Advanced.ExistsAsync(jobKey.GetDatabaseId(), cancellationToken))
                 {
@@ -165,7 +177,7 @@ namespace Quartz.Impl.RavenDB
         public async Task<bool> RemoveJobs(IReadOnlyCollection<JobKey> jobKeys,
             CancellationToken cancellationToken = default)
         {
-            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+            using (var session = Store.OpenAsyncSession())
             {
                 foreach (var key in jobKeys) session.Delete(key);
 
@@ -177,7 +189,7 @@ namespace Quartz.Impl.RavenDB
 
         public async Task<IJobDetail> RetrieveJob(JobKey jobKey, CancellationToken cancellationToken = default)
         {
-            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+            using (var session = Store.OpenAsyncSession())
             {
                 var job = await session.LoadAsync<Job>(jobKey.GetDatabaseId(), cancellationToken);
 
@@ -188,7 +200,7 @@ namespace Quartz.Impl.RavenDB
         public async Task StoreTrigger(IOperableTrigger newTrigger, bool replaceExisting,
             CancellationToken cancellationToken = default)
         {
-            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+            using (var session = Store.OpenAsyncSession())
             {
                 if (await session.Advanced.ExistsAsync(newTrigger.Key.GetDatabaseId(), cancellationToken))
                     if (!replaceExisting)
@@ -232,7 +244,7 @@ namespace Quartz.Impl.RavenDB
 
         public async Task<bool> RemoveTrigger(TriggerKey triggerKey, CancellationToken cancellationToken = default)
         {
-            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+            using (var session = Store.OpenAsyncSession())
             {
                 if (!await session.Advanced.ExistsAsync(triggerKey.GetDatabaseId(), cancellationToken))
                 {
@@ -296,7 +308,7 @@ namespace Quartz.Impl.RavenDB
         public async Task<IOperableTrigger> RetrieveTrigger(TriggerKey triggerKey,
             CancellationToken cancellationToken = default)
         {
-            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+            using (var session = Store.OpenAsyncSession())
             {
                 var trigger = await session.LoadAsync<Trigger>(triggerKey.GetDatabaseId(), cancellationToken);
 
@@ -307,7 +319,7 @@ namespace Quartz.Impl.RavenDB
         public async Task<bool> CalendarExists(string calName, CancellationToken cancellationToken = default)
         {
             bool answer;
-            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+            using (var session = Store.OpenAsyncSession())
             {
                 var scheduler = await session.LoadAsync<Scheduler>(InstanceName, cancellationToken);
                 if (scheduler == null) return false;
@@ -326,7 +338,7 @@ namespace Quartz.Impl.RavenDB
 
         public async Task<bool> CheckExists(JobKey jobKey, CancellationToken cancellationToken = default)
         {
-            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+            using (var session = Store.OpenAsyncSession())
             {
                 return await session.Advanced.ExistsAsync(jobKey.GetDatabaseId(), cancellationToken);
             }
@@ -334,7 +346,7 @@ namespace Quartz.Impl.RavenDB
 
         public async Task<bool> CheckExists(TriggerKey triggerKey, CancellationToken cancellationToken = default)
         {
-            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+            using (var session = Store.OpenAsyncSession())
             {
                 return await session.Advanced.ExistsAsync(triggerKey.GetDatabaseId(), cancellationToken);
             }
@@ -342,7 +354,7 @@ namespace Quartz.Impl.RavenDB
 
         public async Task ClearAllSchedulingData(CancellationToken cancellationToken)
         {
-            await (await DocumentStoreHolder.Store.Operations.SendAsync(new DeleteByQueryOperation(new IndexQuery
+            await (await Store.Operations.SendAsync(new DeleteByQueryOperation(new IndexQuery
             {
                 //
                 // TODO: get rid of this potential injection issue
@@ -350,7 +362,7 @@ namespace Quartz.Impl.RavenDB
                 Query = $"from Jobs j where j.Scheduler == \"{InstanceName}\""
             }), token: cancellationToken)).WaitForCompletionAsync(TimeSpan.FromSeconds(10));
 
-            await (await DocumentStoreHolder.Store.Operations.SendAsync(new DeleteByQueryOperation(new IndexQuery
+            await (await Store.Operations.SendAsync(new DeleteByQueryOperation(new IndexQuery
             {
                 //
                 // TODO: get rid of this potential injection issue
@@ -364,7 +376,7 @@ namespace Quartz.Impl.RavenDB
         {
             var calendarCopy = calendar.Clone();
 
-            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+            using (var session = Store.OpenAsyncSession())
             {
                 var scheduler = await session.LoadAsync<Scheduler>(InstanceName, cancellationToken);
 
@@ -413,7 +425,7 @@ namespace Quartz.Impl.RavenDB
 
             calCollection.Remove(calName);
 
-            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+            using (var session = Store.OpenAsyncSession())
             {
                 var scheduler = await session.LoadAsync<Scheduler>(InstanceName, cancellationToken);
                 scheduler.Calendars = calCollection;
@@ -432,7 +444,7 @@ namespace Quartz.Impl.RavenDB
 
         public async Task<int> GetNumberOfJobs(CancellationToken cancellationToken = default)
         {
-            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+            using (var session = Store.OpenAsyncSession())
             {
                 return await session.Query<Job>().CountAsync(cancellationToken);
             }
@@ -440,7 +452,7 @@ namespace Quartz.Impl.RavenDB
 
         public async Task<int> GetNumberOfTriggers(CancellationToken cancellationToken = default)
         {
-            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+            using (var session = Store.OpenAsyncSession())
             {
                 return await session.Query<Trigger>().CountAsync(cancellationToken);
             }
@@ -459,7 +471,7 @@ namespace Quartz.Impl.RavenDB
 
             var result = new HashSet<JobKey>();
 
-            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+            using (var session = Store.OpenAsyncSession())
             {
                 var allJobs = await session.Query<Job>().ToListAsync(cancellationToken);
 
@@ -478,7 +490,7 @@ namespace Quartz.Impl.RavenDB
 
             var result = new HashSet<TriggerKey>();
 
-            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+            using (var session = Store.OpenAsyncSession())
             {
                 var allTriggers = await session.Query<Trigger>().ToListAsync(cancellationToken);
 
@@ -491,7 +503,7 @@ namespace Quartz.Impl.RavenDB
 
         public async Task<IReadOnlyCollection<string>> GetJobGroupNames(CancellationToken cancellationToken = default)
         {
-            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+            using (var session = Store.OpenAsyncSession())
             {
                 return await session.Query<Job>()
                     .Select(j => j.Group)
@@ -503,7 +515,7 @@ namespace Quartz.Impl.RavenDB
         public async Task<IReadOnlyCollection<string>> GetTriggerGroupNames(
             CancellationToken cancellationToken = default)
         {
-            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+            using (var session = Store.OpenAsyncSession())
             {
                 try
                 {
@@ -528,7 +540,7 @@ namespace Quartz.Impl.RavenDB
         public async Task<IReadOnlyCollection<IOperableTrigger>> GetTriggersForJob(JobKey jobKey,
             CancellationToken cancellationToken = default)
         {
-            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+            using (var session = Store.OpenAsyncSession())
             {
                 try
                 {
@@ -551,7 +563,7 @@ namespace Quartz.Impl.RavenDB
         {
             Trigger trigger;
 
-            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+            using (var session = Store.OpenAsyncSession())
             {
                 trigger = await session.LoadAsync<Trigger>(triggerKey.GetDatabaseId(), cancellationToken);
             }
@@ -577,7 +589,7 @@ namespace Quartz.Impl.RavenDB
 
         public async Task PauseTrigger(TriggerKey triggerKey, CancellationToken cancellationToken = default)
         {
-            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+            using (var session = Store.OpenAsyncSession())
             {
                 var trig = await session.LoadAsync<Trigger>(triggerKey.GetDatabaseId(), cancellationToken);
 
@@ -630,7 +642,7 @@ namespace Quartz.Impl.RavenDB
                 await PauseJob(jobKey, cancellationToken);
                 pausedGroups.Add(jobKey.Group);
 
-                using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+                using (var session = Store.OpenAsyncSession())
                 {
                     var scheduler = await session.LoadAsync<Scheduler>(InstanceName, cancellationToken);
                     scheduler.PausedJobGroups.Add(matcher.CompareToValue);
@@ -644,7 +656,7 @@ namespace Quartz.Impl.RavenDB
 
         public async Task ResumeTrigger(TriggerKey triggerKey, CancellationToken cancellationToken = default)
         {
-            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+            using (var session = Store.OpenAsyncSession())
             {
                 var trigger = await session
                     .Include<Trigger>(t => t.Scheduler) // preload
@@ -687,7 +699,7 @@ namespace Quartz.Impl.RavenDB
         public async Task<IReadOnlyCollection<string>> GetPausedTriggerGroups(
             CancellationToken cancellationToken = default)
         {
-            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+            using (var session = Store.OpenAsyncSession())
             {
                 return await session
                     .Query<Trigger>()
@@ -713,7 +725,7 @@ namespace Quartz.Impl.RavenDB
 
             var keys = await GetJobKeys(matcher, cancellationToken);
 
-            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+            using (var session = Store.OpenAsyncSession())
             {
                 var scheduler = await session.LoadAsync<Scheduler>(InstanceName, cancellationToken);
 
@@ -744,7 +756,7 @@ namespace Quartz.Impl.RavenDB
 
         public async Task ResumeAll(CancellationToken cancellationToken = default)
         {
-            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+            using (var session = Store.OpenAsyncSession())
             {
                 var scheduler = await session.LoadAsync<Scheduler>(InstanceName, cancellationToken);
 
@@ -764,7 +776,7 @@ namespace Quartz.Impl.RavenDB
             var acquiredJobKeysForNoConcurrentExec = new HashSet<JobKey>();
             DateTimeOffset? firstAcquiredTriggerFireTime = null;
 
-            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+            using (var session = Store.OpenAsyncSession())
             {
                 var triggersQuery = await session
                     .Query<Trigger>()
@@ -826,7 +838,7 @@ namespace Quartz.Impl.RavenDB
         public async Task ReleaseAcquiredTrigger(IOperableTrigger trigger,
             CancellationToken cancellationToken = default)
         {
-            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+            using (var session = Store.OpenAsyncSession())
             {
                 var trig = await session.LoadAsync<Trigger>(trigger.GetDatabaseId(), cancellationToken);
                 if (trig is null || trig.State != InternalTriggerState.Acquired) return;
@@ -839,7 +851,7 @@ namespace Quartz.Impl.RavenDB
             IReadOnlyCollection<IOperableTrigger> triggers, CancellationToken cancellationToken = default)
         {
             var results = new List<TriggerFiredResult>();
-            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+            using (var session = Store.OpenAsyncSession())
             {
                 try
                 {
@@ -916,7 +928,7 @@ namespace Quartz.Impl.RavenDB
         public async Task TriggeredJobComplete(IOperableTrigger trigger, IJobDetail jobDetail,
             SchedulerInstruction triggerInstCode, CancellationToken cancellationToken = default)
         {
-            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+            using (var session = Store.OpenAsyncSession())
             {
                 var entry = await session
                     .Include<Trigger>(t => t.Scheduler) // preload scheduler

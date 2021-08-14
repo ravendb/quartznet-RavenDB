@@ -1,4 +1,3 @@
-using System;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -29,14 +28,12 @@ namespace Quartz.Impl.RavenDB.WorkerExample
                             q.UsePersistentStore(s =>
                             {
                                 s.UseProperties = true;
-                                s.RetryInterval = TimeSpan.FromSeconds(15);
-                                s.UseRavenDb();
-                                s.UseJsonSerializer();
-                                s.UseClustering(c =>
+                                s.UseRavenDb(options =>
                                 {
-                                    c.CheckinMisfireThreshold = TimeSpan.FromSeconds(20);
-                                    c.CheckinInterval = TimeSpan.FromSeconds(10);
+                                    options.Database = "QuartzDemo";
+                                    options.Urls = new[] { "http://live-test.ravendb.net/" };
                                 });
+                                s.UseJsonSerializer();
                             });
                         }
                     );

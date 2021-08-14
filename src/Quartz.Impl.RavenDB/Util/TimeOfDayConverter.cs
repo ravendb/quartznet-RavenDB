@@ -4,6 +4,9 @@ using Newtonsoft.Json.Linq;
 
 namespace Quartz.Impl.RavenDB.Util
 {
+    /// <summary>
+    ///     Assists in deserialization of a JSON object to <see cref="TimeOfDay"/>.
+    /// </summary>
     internal class TimeOfDayConverter : JsonConverter
     {
         public override bool CanWrite => false;

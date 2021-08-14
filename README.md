@@ -16,7 +16,7 @@ JobStore implementation for Quartz.NET scheduler using RavenDB.
 - ~~Migrate to RavenDB 5.x~~
 - ~~Migrate from `Common.Logging` to `Microsoft.Extensions.Logging`~~
   - Removed dependency completely for now
-- Overhaul and test configuration system
+- ~~Overhaul and test configuration system~~
 - ~~Adopt [TAP model](https://docs.microsoft.com/en-us/dotnet/csharp/programming-guide/concepts/async/task-asynchronous-programming-model) everywhere~~
 - Migrate Test and Sample projects to SDK format
   - Partially done, test project needs to be adjusted to breaking changes in Quartz.NET upgrade

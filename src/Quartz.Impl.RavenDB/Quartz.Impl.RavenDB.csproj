@@ -10,13 +10,13 @@
     <OutputPath>$(SolutionDir)..\bin\</OutputPath>
     <Authors>Iftah Ben Zaken, Benjamin Höglinger-Stelzer</Authors>
     <PackageId>Quartz.Impl.RavenDB</PackageId>
-    <PackageLicenseUrl>http://www.apache.org/licenses/LICENSE-2.0.html</PackageLicenseUrl>
     <PackageProjectUrl>https://github.com/ravendb/quartznet-RavenDB</PackageProjectUrl>
     <PackageTags>RavenDB NoSQL JobStore Quartz net Quartz.net quartznet scheduler</PackageTags>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <LangVersion>8</LangVersion>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="JetBrains.Annotations" Version="2021.2.0" PrivateAssets="All" />
     <PackageReference Include="Quartz" Version="3.3.3" />
     <PackageReference Include="RavenDB.Client" Version="5.2.1" />
   </ItemGroup>

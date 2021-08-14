@@ -1,11 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Configuration;
-using System.Data.Common;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
+using JetBrains.Annotations;
+using Newtonsoft.Json;
 using Quartz.Core;
 using Quartz.Simpl;
 using Quartz.Spi;
@@ -36,40 +36,38 @@ namespace Quartz.Impl.RavenDB
     /// <author>Iftah Ben Zaken</author>
     public partial class RavenJobStore : IJobStore
     {
-        private static long _ftrCtr = SystemTime.UtcNow().Ticks;
+        public string Database { get; set; }
 
-        public static string DefaultConnectionString =
-            "Url=http://localhost:8080;DefaultDatabase=MyDatabaseName;ApiKey=YourKey";
+        [UsedImplicitly]
+        public bool UseProperties { get; set; }
+
+        private string[] _urls;
+
+        [UsedImplicitly]
+        public string Urls
+        {
+            get => JsonConvert.SerializeObject(_urls);
+            set => _urls = JsonConvert.DeserializeObject<string[]>(value);
+        }
+
+        public string CertPath { get; set; }
+
+        public string CertPass { get; set; }
+
+        private static long _ftrCtr = SystemTime.UtcNow().Ticks;
 
         private ISchedulerSignaler _signaler;
 
         private TimeSpan _misfireThreshold = TimeSpan.FromSeconds(5);
 
+        private IDocumentStore Store { get; set; }
+
         public RavenJobStore()
         {
-            var connectionStringSettings = ConfigurationManager.ConnectionStrings["quartznet-ravendb"];
-            var stringBuilder = new DbConnectionStringBuilder
-            {
-                ConnectionString = connectionStringSettings != null
-                    ? connectionStringSettings.ConnectionString
-                    : DefaultConnectionString
-            };
-
-            Url = stringBuilder["Url"] as string;
-            DefaultDatabase = stringBuilder["DefaultDatabase"] as string;
-            ApiKey = stringBuilder.ContainsKey("ApiKey") ? stringBuilder["ApiKey"] as string : null;
-
             InstanceName = "UnitTestScheduler";
             InstanceId = "instance_two";
         }
         
-        public static string Url { get; set; }
-        
-        public static string DefaultDatabase { get; set; }
-        
-        [Obsolete]
-        public static string ApiKey { get; set; }
-
         protected virtual DateTimeOffset MisfireTime
         {
             [MethodImpl(MethodImplOptions.Synchronized)]
@@ -115,7 +113,7 @@ namespace Quartz.Impl.RavenDB
 
         public async Task SetSchedulerState(SchedulerState state, CancellationToken cancellationToken)
         {
-            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+            using (var session = Store.OpenAsyncSession())
             {
                 var scheduler = await session.LoadAsync<Scheduler>(InstanceName, cancellationToken);
                 scheduler.State = state;
@@ -204,7 +202,7 @@ namespace Quartz.Impl.RavenDB
 
         public async Task<Dictionary<string, ICalendar>> RetrieveCalendarCollection(CancellationToken cancellationToken)
         {
-            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+            using (var session = Store.OpenAsyncSession())
             {
                 var scheduler = await session.LoadAsync<Scheduler>(InstanceName, cancellationToken);
 
@@ -222,7 +220,7 @@ namespace Quartz.Impl.RavenDB
 
         public async Task<ISet<string>> GetPausedJobGroups(CancellationToken cancellationToken)
         {
-            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+            using (var session = Store.OpenAsyncSession())
             {
                 return (await session.LoadAsync<Scheduler>(InstanceName, cancellationToken)).PausedJobGroups;
             }
@@ -230,7 +228,7 @@ namespace Quartz.Impl.RavenDB
 
         public async Task<ISet<string>> GetBlockedJobs(CancellationToken cancellationToken)
         {
-            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+            using (var session = Store.OpenAsyncSession())
             {
                 return (await session.LoadAsync<Scheduler>(InstanceName, cancellationToken)).BlockedJobs;
             }
@@ -272,7 +270,7 @@ namespace Quartz.Impl.RavenDB
         protected virtual async Task SetAllTriggersOfJobToState(JobKey jobKey, InternalTriggerState state,
             CancellationToken cancellationToken)
         {
-            using (var session = DocumentStoreHolder.Store.OpenAsyncSession())
+            using (var session = Store.OpenAsyncSession())
             {
                 var triggers = session.Query<Trigger>()
                     .Where(t => Equals(t.Group, jobKey.Group) && Equals(t.JobName, jobKey.Name));
