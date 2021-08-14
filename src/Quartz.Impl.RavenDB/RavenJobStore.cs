@@ -113,12 +113,10 @@ namespace Quartz.Impl.RavenDB
 
         public async Task SetSchedulerState(SchedulerState state, CancellationToken cancellationToken)
         {
-            using (var session = Store.OpenAsyncSession())
-            {
-                var scheduler = await session.LoadAsync<Scheduler>(InstanceName, cancellationToken);
-                scheduler.State = state;
-                await session.SaveChangesAsync(cancellationToken);
-            }
+            using var session = Store.OpenAsyncSession();
+            var scheduler = await session.LoadAsync<Scheduler>(InstanceName, cancellationToken);
+            scheduler.State = state;
+            await session.SaveChangesAsync(cancellationToken);
         }
 
         /// <summary>
@@ -202,36 +200,30 @@ namespace Quartz.Impl.RavenDB
 
         public async Task<Dictionary<string, ICalendar>> RetrieveCalendarCollection(CancellationToken cancellationToken)
         {
-            using (var session = Store.OpenAsyncSession())
-            {
-                var scheduler = await session.LoadAsync<Scheduler>(InstanceName, cancellationToken);
+            using var session = Store.OpenAsyncSession();
+            var scheduler = await session.LoadAsync<Scheduler>(InstanceName, cancellationToken);
 
-                if (scheduler is null)
-                    throw new NullReferenceException(string.Format(CultureInfo.InvariantCulture,
-                        "Scheduler with instance name '{0}' is null", InstanceName));
+            if (scheduler is null)
+                throw new NullReferenceException(string.Format(CultureInfo.InvariantCulture,
+                    "Scheduler with instance name '{0}' is null", InstanceName));
 
-                if (scheduler.Calendars is null)
-                    throw new NullReferenceException(string.Format(CultureInfo.InvariantCulture,
-                        "Calendar collection in '{0}' is null", InstanceName));
+            if (scheduler.Calendars is null)
+                throw new NullReferenceException(string.Format(CultureInfo.InvariantCulture,
+                    "Calendar collection in '{0}' is null", InstanceName));
 
-                return scheduler.Calendars;
-            }
+            return scheduler.Calendars;
         }
 
         public async Task<ISet<string>> GetPausedJobGroups(CancellationToken cancellationToken)
         {
-            using (var session = Store.OpenAsyncSession())
-            {
-                return (await session.LoadAsync<Scheduler>(InstanceName, cancellationToken)).PausedJobGroups;
-            }
+            using var session = Store.OpenAsyncSession();
+            return (await session.LoadAsync<Scheduler>(InstanceName, cancellationToken)).PausedJobGroups;
         }
 
         public async Task<ISet<string>> GetBlockedJobs(CancellationToken cancellationToken)
         {
-            using (var session = Store.OpenAsyncSession())
-            {
-                return (await session.LoadAsync<Scheduler>(InstanceName, cancellationToken)).BlockedJobs;
-            }
+            using var session = Store.OpenAsyncSession();
+            return (await session.LoadAsync<Scheduler>(InstanceName, cancellationToken)).BlockedJobs;
         }
 
         protected virtual async Task<bool> ApplyMisfire(Trigger trigger, CancellationToken cancellationToken)
@@ -270,19 +262,17 @@ namespace Quartz.Impl.RavenDB
         protected virtual async Task SetAllTriggersOfJobToState(JobKey jobKey, InternalTriggerState state,
             CancellationToken cancellationToken)
         {
-            using (var session = Store.OpenAsyncSession())
+            using var session = Store.OpenAsyncSession();
+            var triggers = session.Query<Trigger>()
+                .Where(t => Equals(t.Group, jobKey.Group) && Equals(t.JobName, jobKey.Name));
+
+            foreach (var trig in triggers)
             {
-                var triggers = session.Query<Trigger>()
-                    .Where(t => Equals(t.Group, jobKey.Group) && Equals(t.JobName, jobKey.Name));
-
-                foreach (var trig in triggers)
-                {
-                    var triggerToUpdate = await session.LoadAsync<Trigger>(trig.Key, cancellationToken);
-                    triggerToUpdate.State = state;
-                }
-
-                await session.SaveChangesAsync(cancellationToken);
+                var triggerToUpdate = await session.LoadAsync<Trigger>(trig.Key, cancellationToken);
+                triggerToUpdate.State = state;
             }
+
+            await session.SaveChangesAsync(cancellationToken);
         }
     }
 }
