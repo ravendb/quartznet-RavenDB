@@ -106,18 +106,17 @@ namespace Quartz.Impl.RavenDB
         public async Task StoreJob(IJobDetail newJob, bool replaceExisting,
             CancellationToken cancellationToken = default)
         {
-            using (var session = Store.OpenAsyncSession())
-            {
-                if (await session.Advanced.ExistsAsync(newJob.Key.GetDatabaseId(), cancellationToken))
-                    if (!replaceExisting)
-                        throw new ObjectAlreadyExistsException(newJob);
+            using var session = Store.OpenAsyncSession();
 
-                var job = new Job(newJob, InstanceName);
+            if (await session.Advanced.ExistsAsync(newJob.Key.GetDatabaseId(), cancellationToken))
+                if (!replaceExisting)
+                    throw new ObjectAlreadyExistsException(newJob);
 
-                // Store() overwrites if job id already exists
-                await session.StoreAsync(job, job.Key, cancellationToken);
-                await session.SaveChangesAsync(cancellationToken);
-            }
+            var job = new Job(newJob, InstanceName);
+
+            // Store() overwrites if job id already exists
+            await session.StoreAsync(job, job.Key, cancellationToken);
+            await session.SaveChangesAsync(cancellationToken);
         }
 
         public async Task StoreJobsAndTriggers(
@@ -169,16 +168,16 @@ namespace Quartz.Impl.RavenDB
 
         public async Task<bool> RemoveJob(JobKey jobKey, CancellationToken cancellationToken = default)
         {
-            using (var session = Store.OpenAsyncSession())
-            {
-                if (!await session.Advanced.ExistsAsync(jobKey.GetDatabaseId(), cancellationToken))
-                {
-                    return false;
-                }
+            using var session = Store.OpenAsyncSession();
 
-                session.Delete(jobKey.GetDatabaseId());
-                await session.SaveChangesAsync(cancellationToken);
+            if (!await session.Advanced.ExistsAsync(jobKey.GetDatabaseId(), cancellationToken))
+            {
+                return false;
             }
+
+            session.Delete(jobKey.GetDatabaseId());
+
+            await session.SaveChangesAsync(cancellationToken);
 
             return true;
         }
@@ -187,6 +186,7 @@ namespace Quartz.Impl.RavenDB
             CancellationToken cancellationToken = default)
         {
             using var session = Store.OpenAsyncSession();
+
             foreach (var key in jobKeys) session.Delete(key);
 
             await session.SaveChangesAsync(cancellationToken);
@@ -197,6 +197,7 @@ namespace Quartz.Impl.RavenDB
         public async Task<IJobDetail> RetrieveJob(JobKey jobKey, CancellationToken cancellationToken = default)
         {
             using var session = Store.OpenAsyncSession();
+
             var job = await session.LoadAsync<Job>(jobKey.GetDatabaseId(), cancellationToken);
 
             return job?.Deserialize();
