@@ -68,6 +68,7 @@ namespace Quartz.Impl.RavenDB
             InstanceId = "instance_two";
         }
         
+        [UsedImplicitly]
         protected virtual DateTimeOffset MisfireTime
         {
             [MethodImpl(MethodImplOptions.Synchronized)]
