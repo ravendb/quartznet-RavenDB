@@ -122,40 +122,40 @@ namespace Quartz.Impl.RavenDB
             IReadOnlyDictionary<IJobDetail, IReadOnlyCollection<ITrigger>> triggersAndJobs, bool replace,
             CancellationToken cancellationToken = default)
         {
-            using (var bulkInsert = Store.BulkInsert(token: cancellationToken))
+            using var session = Store.OpenAsyncSession();
+            await using var bulkInsert = Store.BulkInsert(token: cancellationToken);
+
+            var scheduler = await session.LoadAsync<Scheduler>(InstanceName, cancellationToken);
+
+            foreach (var pair in triggersAndJobs)
             {
-                foreach (var pair in triggersAndJobs)
+                // First store the current job
+                await bulkInsert.StoreAsync(new Job(pair.Key, InstanceName), pair.Key.Key.GetDatabaseId());
+
+                // Storing all triggers for the current job
+                foreach (var trig in pair.Value)
                 {
-                    // First store the current job
-                    await bulkInsert.StoreAsync(new Job(pair.Key, InstanceName), pair.Key.Key.GetDatabaseId());
+                    if (!(trig is IOperableTrigger operTrig)) continue;
+                    var trigger = new Trigger(operTrig, InstanceName);
 
-                    // Storing all triggers for the current job
-                    foreach (var trig in pair.Value)
+                    if ((await GetPausedTriggerGroups(cancellationToken).ConfigureAwait(false)).Contains(
+                            operTrig.Key.Group) ||
+                        (await GetPausedJobGroups(cancellationToken).ConfigureAwait(false)).Contains(operTrig.JobKey
+                            .Group))
                     {
-                        if (!(trig is IOperableTrigger operTrig)) continue;
-                        var trigger = new Trigger(operTrig, InstanceName);
-
-                        if ((await GetPausedTriggerGroups(cancellationToken).ConfigureAwait(false)).Contains(
-                                operTrig.Key.Group) ||
-                            (await GetPausedJobGroups(cancellationToken).ConfigureAwait(false)).Contains(operTrig.JobKey
-                                .Group))
-                        {
-                            trigger.State = InternalTriggerState.Paused;
-                            if ((await GetBlockedJobs(cancellationToken).ConfigureAwait(false)).Contains(
-                                operTrig.GetJobDatabaseId()))
-                                trigger.State = InternalTriggerState.PausedAndBlocked;
-                        }
-                        else if ((await GetBlockedJobs(cancellationToken).ConfigureAwait(false)).Contains(
-                            operTrig.GetJobDatabaseId()))
-                        {
-                            trigger.State = InternalTriggerState.Blocked;
-                        }
-
-                        await bulkInsert.StoreAsync(trigger, trigger.Key);
+                        trigger.State = InternalTriggerState.Paused;
+                        if (scheduler.BlockedJobs.Contains(operTrig.GetJobDatabaseId()))
+                            trigger.State = InternalTriggerState.PausedAndBlocked;
                     }
+                    else if (scheduler.BlockedJobs.Contains(operTrig.GetJobDatabaseId()))
+                    {
+                        trigger.State = InternalTriggerState.Blocked;
+                    }
+
+                    await bulkInsert.StoreAsync(trigger, trigger.Key);
                 }
-                // bulkInsert is disposed - same effect as session.SaveChanges()
             }
+            // bulkInsert is disposed - same effect as session.SaveChanges()
         }
 
         public async Task<bool> RemoveJob(JobKey jobKey, CancellationToken cancellationToken = default)
