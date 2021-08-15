@@ -11,6 +11,7 @@ using System.Linq;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
+using Raven.Client;
 using Raven.Client.Documents.Operations;
 using Raven.Client.Documents.Queries;
 
@@ -346,18 +347,20 @@ namespace Quartz.Impl.RavenDB
         {
             await (await Store.Operations.SendAsync(new DeleteByQueryOperation(new IndexQuery
             {
-                //
-                // TODO: get rid of this potential injection issue
-                // 
-                Query = $"from Jobs j where j.Scheduler == \"{InstanceName}\""
+                QueryParameters = new Parameters()
+                {
+                    {"name", InstanceName}
+                },
+                Query = "from Jobs j where j.Scheduler == $name"
             }), token: cancellationToken)).WaitForCompletionAsync(TimeSpan.FromSeconds(10));
 
             await (await Store.Operations.SendAsync(new DeleteByQueryOperation(new IndexQuery
             {
-                //
-                // TODO: get rid of this potential injection issue
-                // 
-                Query = $"from Triggers t where t.Scheduler == \"{InstanceName}\""
+                QueryParameters = new Parameters()
+                {
+                    {"name", InstanceName}
+                },
+                Query = "from Triggers t where t.Scheduler == $name"
             }), token: cancellationToken)).WaitForCompletionAsync(TimeSpan.FromSeconds(10));
         }
 
