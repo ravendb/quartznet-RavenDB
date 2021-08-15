@@ -188,7 +188,8 @@ namespace Quartz.Impl.RavenDB
         {
             using var session = Store.OpenAsyncSession();
 
-            foreach (var key in jobKeys) session.Delete(key);
+            foreach (var key in jobKeys) 
+                session.Delete(key);
 
             await session.SaveChangesAsync(cancellationToken);
 
