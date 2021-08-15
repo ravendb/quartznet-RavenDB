@@ -137,6 +137,7 @@ namespace Quartz.Impl.RavenDB
                 // update inconsistent states
                 var queryResult = await session
                     .Query<Trigger>()
+                    .Include(t => t.Scheduler) // pre-load scheduler
                     .Where(t =>
                         t.Scheduler == InstanceName && (t.State == InternalTriggerState.Acquired ||
                                                         t.State == InternalTriggerState.Blocked)
@@ -161,7 +162,6 @@ namespace Quartz.Impl.RavenDB
                 foreach (var job in queryResultJobs)
                     ((List<IOperableTrigger>) recoveringJobTriggers).AddRange(
                         await GetTriggersForJob(new JobKey(job.Name, job.Group), cancellationToken));
-
 
                 foreach (var trigger in recoveringJobTriggers)
                     if (await CheckExists(trigger.JobKey, cancellationToken))
