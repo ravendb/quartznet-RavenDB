@@ -35,6 +35,9 @@ namespace Quartz.Impl.RavenDB
 
         private ISchedulerSignaler _signaler;
 
+        /// <summary>
+        ///     Deserialized array of strings taken from <see cref="Urls"/>.
+        /// </summary>
         private string[] _urls;
 
         /// <summary>
@@ -42,7 +45,12 @@ namespace Quartz.Impl.RavenDB
         /// </summary>
         public string Database { get; set; }
 
-        [UsedImplicitly] public bool UseProperties { get; set; }
+        /// <summary>
+        ///     Only here to satisfy the object creation. We always attempt to (de-)serialize any value type in the Job Data Map
+        ///     anyway, not just strings.
+        /// </summary>
+        [UsedImplicitly]
+        public bool UseProperties { get; set; }
 
         /// <summary>
         ///     Gets the URL(s) to the database server(s).
