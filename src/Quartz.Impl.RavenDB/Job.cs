@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using Newtonsoft.Json;
+using Quartz.Impl.RavenDB.Util;
 
 namespace Quartz.Impl.RavenDB
 {
@@ -31,6 +33,7 @@ namespace Quartz.Impl.RavenDB
         public string Scheduler { get; set; }
 
         public string Description { get; set; }
+        [JsonConverter(typeof(JobTypeConverter))]
         public Type JobType { get; set; }
         public bool Durable { get; set; }
         public bool ConcurrentExecutionDisallowed { get; set; }

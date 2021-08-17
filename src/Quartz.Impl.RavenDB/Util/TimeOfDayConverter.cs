@@ -5,18 +5,19 @@ using Newtonsoft.Json.Linq;
 namespace Quartz.Impl.RavenDB.Util
 {
     /// <summary>
-    ///     Assists in deserialization of a JSON object to <see cref="TimeOfDay"/>.
+    ///     Assists in deserialization of a JSON object to <see cref="TimeOfDay" />.
     /// </summary>
-    internal class TimeOfDayConverter : JsonConverter
+    internal class TimeOfDayConverter : JsonConverter<TimeOfDay>
     {
         public override bool CanWrite => false;
 
-        public override bool CanConvert(Type objectType)
+        public override void WriteJson(JsonWriter writer, TimeOfDay? value, JsonSerializer serializer)
         {
-            return objectType == typeof(TimeOfDay);
+            throw new NotImplementedException();
         }
 
-        public override object ReadJson(JsonReader reader, Type objectType, object existingValue,
+        public override TimeOfDay? ReadJson(JsonReader reader, Type objectType, TimeOfDay? existingValue,
+            bool hasExistingValue,
             JsonSerializer serializer)
         {
             var jo = JObject.Load(reader);
@@ -26,11 +27,6 @@ namespace Quartz.Impl.RavenDB.Util
             var second = int.Parse((string) jo["Second"]);
 
             return new TimeOfDay(hour, minute, second);
-        }
-
-        public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
-        {
-            throw new NotImplementedException();
         }
     }
 }
