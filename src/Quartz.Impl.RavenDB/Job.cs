@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace Quartz.Impl.RavenDB
 {
     /// <summary>
-    ///     A database serializable variant of <see cref="IJobDetail" />.
+    ///     A database serializable variant of <see cref="IJobDetail"/>.
     /// </summary>
     internal class Job
     {
@@ -17,7 +17,7 @@ namespace Quartz.Impl.RavenDB
             Scheduler = schedulerInstanceName;
 
             Description = newJob.Description;
-            JobType = Type.GetType($"{newJob.JobType.FullName}, {newJob.JobType.Assembly.GetName().Name}") ?? JobType;
+            JobType = newJob.JobType;
             Durable = newJob.Durable;
             ConcurrentExecutionDisallowed = newJob.ConcurrentExecutionDisallowed;
             PersistJobDataAfterExecution = newJob.PersistJobDataAfterExecution;
@@ -39,15 +39,15 @@ namespace Quartz.Impl.RavenDB
         public IDictionary<string, object> JobDataMap { get; set; }
 
         /// <summary>
-        ///     Converts this <see cref="Job" /> back into an <see cref="IJobDetail" />.
+        ///     Converts this <see cref="Job"/> back into an <see cref="IJobDetail"/>.
         /// </summary>
-        /// <returns>The built <see cref="IJobDetail" />.</returns>
+        /// <returns>The built <see cref="IJobDetail"/>.</returns>
         public IJobDetail Deserialize()
         {
             return JobBuilder.Create()
                 .WithIdentity(Name, Group)
                 .WithDescription(Description)
-                .OfType(Type.GetType($"{JobType.FullName}, {JobType.Assembly.GetName().Name}") ?? JobType)
+                .OfType(JobType)
                 .RequestRecovery(RequestsRecovery)
                 .SetJobData(new JobDataMap(JobDataMap))
                 .StoreDurably(Durable)
