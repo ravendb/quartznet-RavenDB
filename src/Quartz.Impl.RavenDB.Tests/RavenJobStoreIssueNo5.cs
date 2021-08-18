@@ -1,46 +1,48 @@
 ﻿using System;
 using System.Collections.Specialized;
+using System.Threading;
+using System.Threading.Tasks;
 using NUnit.Framework;
 
 namespace Quartz.Impl.RavenDB.Tests
 {
     public class RavenJobStoreIssueNo5
     {
-        private readonly JobListener listener = new JobListener();
+        private readonly JobListener _listener = new JobListener();
 
-        private readonly ITrigger trigger = TriggerBuilder.Create()
+        private readonly ITrigger _trigger = TriggerBuilder.Create()
             .WithIdentity("trigger", "g1")
             .StartAt(DateTime.Now - TimeSpan.FromHours(1))
             .WithSimpleSchedule(s => s.WithMisfireHandlingInstructionFireNow())
             .Build();
 
-        private readonly IJobDetail job = JobBuilder.Create<TestJob>()
+        private readonly IJobDetail _job = JobBuilder.Create<TestJob>()
             .WithIdentity("job", "g1")
             .Build();
 
-        private void ScheduleTestJobAndWaitForExecution(IScheduler scheduler)
+        private async Task ScheduleTestJobAndWaitForExecution(IScheduler scheduler)
         {
-            scheduler.ListenerManager.AddJobListener(listener);
-            scheduler.Start();
-            scheduler.ScheduleJob(job, trigger);
-            while (!scheduler.CheckExists(job.Key)) ;
-            scheduler.Shutdown(true);
+            scheduler.ListenerManager.AddJobListener(_listener);
+            await scheduler.Start();
+            await scheduler.ScheduleJob(_job, _trigger);
+            while (!await scheduler.CheckExists(_job.Key)) ;
+            await scheduler.Shutdown(true);
         }
 
         [Test]
-        public void InMemory()
+        public async Task InMemory()
         {
-            var scheduler = StdSchedulerFactory.GetDefaultScheduler();
+            var scheduler = await StdSchedulerFactory.GetDefaultScheduler();
 
-            ScheduleTestJobAndWaitForExecution(scheduler);
+            await ScheduleTestJobAndWaitForExecution(scheduler);
 
-            Assert.True(listener.WasExecuted);
+            Assert.True(_listener.WasExecuted);
         }
 
         [Test]
-        public void InRavenDB()
+        public async Task InRavenDb()
         {
-             NameValueCollection properties = new NameValueCollection
+            var properties = new NameValueCollection
             {
                 // Normal scheduler properties
                 ["quartz.scheduler.instanceName"] = "TestScheduler",
@@ -50,34 +52,37 @@ namespace Quartz.Impl.RavenDB.Tests
             };
 
             ISchedulerFactory sf = new StdSchedulerFactory(properties);
-            IScheduler scheduler = sf.GetScheduler();
+            var scheduler = await sf.GetScheduler();
 
-            ScheduleTestJobAndWaitForExecution(scheduler);
+            await ScheduleTestJobAndWaitForExecution(scheduler);
 
-            Assert.True(listener.WasExecuted);
+            Assert.True(_listener.WasExecuted);
         }
+
         public class TestJob : IJob
         {
-            public void Execute(IJobExecutionContext context)
+            public Task Execute(IJobExecutionContext context)
             {
+                return Task.CompletedTask;
             }
         }
 
         public class JobListener : IJobListener
         {
-            public void JobToBeExecuted(IJobExecutionContext context)
+            public Task JobToBeExecuted(IJobExecutionContext context, CancellationToken cancellationToken = default)
             {
-
+                return Task.CompletedTask;
             }
 
-            public void JobExecutionVetoed(IJobExecutionContext context)
+            public Task JobExecutionVetoed(IJobExecutionContext context, CancellationToken cancellationToken = default)
             {
-
+                return Task.CompletedTask;
             }
 
-            public void JobWasExecuted(IJobExecutionContext context, JobExecutionException jobException)
+            public Task JobWasExecuted(IJobExecutionContext context, JobExecutionException jobException, CancellationToken cancellationToken = default)
             {
                 WasExecuted = true;
+                return Task.CompletedTask;
             }
 
             public bool WasExecuted { get; private set; }
