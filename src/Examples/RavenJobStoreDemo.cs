@@ -21,6 +21,13 @@ namespace Examples
                 ["quartz.threadPool.threadPriority"] = "Normal",
                 // Setting RavenDB as the persisted JobStore
                 ["quartz.jobStore.type"] = "Quartz.Impl.RavenDB.RavenJobStore, Quartz.Impl.RavenDB",
+                // RavenDB Default Database name
+                ["quartz.jobStore.database"] = "QuartzDemo",
+                // One or more URLs to database server
+                ["quartz.jobStore.urls"] = "[\"http://live-test.ravendb.net\"]",
+                // If you use authentication, specify certificate and password
+                //["quartz.jobStore.certPath"] = "My/Cert/path.pfx",
+                //["quartz.jobStore.certPass"] = "SuperSecret",
                 ["quartz.serializer.type"] = "json"
             };
 

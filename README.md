@@ -15,37 +15,32 @@ JobStore implementation for Quartz.NET scheduler using RavenDB.
 First add scheduling to your app using Quartz.NET ([example](http://www.quartz-scheduler.net/documentation/quartz-2.x/quick-start.html)).
 Then install the NuGet [package](https://www.nuget.org/packages/Quartz.Impl.RavenDB/).
 
-## Configuration & Usage 
+## Configuration & Usage
 
 ### .NET Framework
 
-In your code, where you would have [normally configured](https://www.quartz-scheduler.net/documentation/quartz-3.x/tutorial/job-stores.html) Quartz to use a persistent job store, you must add the following configuration property:
-
-```csharp
-quartz.jobStore.type = Quartz.Impl.RavenDB.RavenJobStore, Quartz.Impl.RavenDB
-```
-
-Also, the following configuration must be added to app.config or web.config (change the connection string according to your server url, database name and ApiKey).
-
-```xml
-  <connectionStrings>
-    <add name="quartznet-ravendb" connectionString="Url=http://localhost:8080;DefaultDatabase=MyDatabaseName"/>
-  </connectionStrings>
-```
+In your code, where you would have [normally configured](https://www.quartz-scheduler.net/documentation/quartz-3.x/tutorial/job-stores.html) Quartz to use a persistent job store, you must add the following configuration properties:
 
 ```csharp
 // In your application where you want to setup the scheduler:
 NameValueCollection properties = new NameValueCollection
 {
-	// Normal scheduler properties
-	["quartz.scheduler.instanceName"] = "TestScheduler",
-	["quartz.scheduler.instanceId"] = "instance_one",
-	["quartz.threadPool.type"] = "Quartz.Simpl.SimpleThreadPool, Quartz",
-	["quartz.threadPool.threadCount"] = "1",
-	["quartz.threadPool.threadPriority"] = "Normal",
-	
-	// RavenDB JobStore property
-	["quartz.jobStore.type"] = "Quartz.Impl.RavenDB.RavenJobStore, Quartz.Impl.RavenDB"
+    // Normal scheduler properties
+    ["quartz.scheduler.instanceName"] = "TestScheduler",
+    ["quartz.scheduler.instanceId"] = "instance_one",
+    ["quartz.threadPool.type"] = "Quartz.Simpl.SimpleThreadPool, Quartz",
+    ["quartz.threadPool.threadCount"] = "1",
+    ["quartz.threadPool.threadPriority"] = "Normal",
+
+    // RavenDB JobStore property
+    ["quartz.jobStore.type"] = "Quartz.Impl.RavenDB.RavenJobStore, Quartz.Impl.RavenDB"
+    // RavenDB Default Database name
+    ["quartz.jobStore.database"] = "QuartzDemo",
+    // One or more URLs to database server
+    ["quartz.jobStore.urls"] = "[\"http://live-test.ravendb.net\"]",
+    // If you use authentication, specify certificate and password
+    //["quartz.jobStore.certPath"] = "My/Cert/path.pfx",
+    //["quartz.jobStore.certPass"] = "SuperSecret",
 };
 
 // Init scheduler with the desired configuration properties
@@ -94,7 +89,3 @@ services.AddQuartzHostedService(
     q => q.WaitForJobsToComplete = true);
 
 ```
-
----
-
-You can also take a look at the following [demo](src/Examples/RavenJobStoreDemo.cs) and you are more than welcome to contribute and make suggestions for improvements.
