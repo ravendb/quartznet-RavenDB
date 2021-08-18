@@ -66,32 +66,32 @@ var section = configuration.GetSection("MyService");
 var config = section.Get<MyServiceConfig>();
 
 services.AddQuartz(q =>
-	{
-		q.UseMicrosoftDependencyInjectionJobFactory();
+    {
+        q.UseMicrosoftDependencyInjectionJobFactory();
 
-		q.UseDefaultThreadPool(tp =>
-		{
-			tp.MaxConcurrency = 10;
-		});
+        q.UseDefaultThreadPool(tp =>
+        {
+            tp.MaxConcurrency = 10;
+        });
 
-		q.UsePersistentStore(s =>
-		{
-			s.UseRavenDb(options =>
-			{
-				options.Urls = config.QuartzRavenStore.Urls;
-				options.Database = config.QuartzRavenStore.DatabaseName;
-				// specify certificate, if necessary
-			});
+        q.UsePersistentStore(s =>
+        {
+            s.UseRavenDb(options =>
+            {
+                options.Urls = config.QuartzRavenStore.Urls;
+                options.Database = config.QuartzRavenStore.DatabaseName;
+                // specify certificate, if necessary
+            });
 
-			s.UseJsonSerializer();
-		});
-		
-		// Add jobs and triggers as you wish
-	}
+            s.UseJsonSerializer();
+        });
+        
+        // Add jobs and triggers as you wish
+    }
 );
 
 services.AddQuartzHostedService(
-	q => q.WaitForJobsToComplete = true);
+    q => q.WaitForJobsToComplete = true);
 
 ```
 
