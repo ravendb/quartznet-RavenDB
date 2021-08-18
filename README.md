@@ -97,4 +97,4 @@ services.AddQuartzHostedService(
 
 ---
 
-You can also take a look at the following [demo](./blob/master/src/Examples/RavenJobStoreDemo.cs) and you are more than welcome to contribute and make suggestions for improvements.
+You can also take a look at the following [demo](src/Examples/RavenJobStoreDemo.cs) and you are more than welcome to contribute and make suggestions for improvements.
