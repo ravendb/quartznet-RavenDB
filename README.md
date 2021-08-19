@@ -2,8 +2,6 @@
 
 JobStore implementation for Quartz.NET scheduler using RavenDB.
 
-[![Build status](https://ci.appveyor.com/api/projects/status/y8252pb1yn59yul0?svg=true)](https://ci.appveyor.com/project/nefarius/quartznet-ravendb)
-
 ## About
 
 [Quartz.NET](https://github.com/quartznet/quartznet) is a full-featured, open source job scheduling system that can be used from smallest apps to large scale enterprise systems.
