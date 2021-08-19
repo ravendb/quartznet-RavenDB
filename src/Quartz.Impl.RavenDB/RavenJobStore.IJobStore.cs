@@ -35,8 +35,11 @@ namespace Quartz.Impl.RavenDB
             
             Store.Initialize();
 
-            //await new TriggerIndex().ExecuteAsync(Store, token: cancellationToken);
-            //await new JobIndex().ExecuteAsync(Store, token: cancellationToken);
+            Store.OnBeforeQuery += (sender, beforeQueryExecutedArgs) =>
+            {
+                beforeQueryExecutedArgs.QueryCustomization.WaitForNonStaleResults();
+            };
+
             return Task.CompletedTask;
         }
 
