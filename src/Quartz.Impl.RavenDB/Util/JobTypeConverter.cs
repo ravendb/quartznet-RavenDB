@@ -1,5 +1,6 @@
 ﻿using System;
 using Newtonsoft.Json;
+using Quartz.Util;
 
 namespace Quartz.Impl.RavenDB.Util
 {
@@ -17,7 +18,7 @@ namespace Quartz.Impl.RavenDB.Util
 
         public override void WriteJson(JsonWriter writer, Type value, JsonSerializer serializer)
         {
-            writer.WriteValue($"{value.FullName}, {value.Assembly.GetName().Name}");
+            writer.WriteValue(value.AssemblyQualifiedNameWithoutVersion());
         }
     }
 }
