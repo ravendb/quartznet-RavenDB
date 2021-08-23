@@ -138,8 +138,7 @@ namespace Quartz.Impl.RavenDB
                 await bulkInsert.StoreAsync(new Job(pair.Key, InstanceName), pair.Key.Key.GetDatabaseId());
 
                 // Storing all triggers for the current job
-                foreach (var orig in pair.Value.Where(t => t.GetType() == typeof(IOperableTrigger))
-                    .Cast<IOperableTrigger>())
+                foreach (var orig in pair.Value.OfType<IOperableTrigger>())
                 {
                     var trigger = new Trigger(orig, InstanceName);
 
