@@ -522,19 +522,11 @@ namespace Quartz.Impl.RavenDB
         {
             using var session = Store.OpenAsyncSession();
 
-            try
-            {
-                var result = (await session
-                        .Query<Trigger>()
-                        .Where(t => Equals(t.JobName, jobKey.Name) && Equals(t.Group, jobKey.Group))
-                        .ToListAsync(cancellationToken))
-                    .Select(trigger => trigger.Deserialize()).ToList();
-                return result;
-            }
-            catch (NullReferenceException)
-            {
-                return new List<IOperableTrigger>();
-            }
+            return (await session
+                    .Query<Trigger>()
+                    .Where(t => Equals(t.JobName, jobKey.Name) && Equals(t.Group, jobKey.Group))
+                    .ToListAsync(cancellationToken))
+                .Select(trigger => trigger.Deserialize()).ToList();
         }
 
         public async Task<TriggerState> GetTriggerState(TriggerKey triggerKey,
