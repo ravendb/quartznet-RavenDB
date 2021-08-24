@@ -27,11 +27,9 @@ namespace Quartz.Impl.RavenDB
             Store = new DocumentStore
             {
                 Urls = _urls,
-                Database = Database
+                Database = Database,
+                Certificate = string.IsNullOrEmpty(CertPath) ? null : new X509Certificate2(CertPath, CertPass)
             };
-
-            if (!string.IsNullOrEmpty(CertPath))
-                ((DocumentStore) Store).Certificate = new X509Certificate2(CertPath, CertPass);
             
             Store.Initialize();
 
