@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Specialized;
 using System.Threading;
+using System.Threading.Tasks;
 using Quartz;
 using Quartz.Impl;
 
@@ -8,15 +9,9 @@ namespace Examples
 {
     internal class RavenJobStoreDemo
     {
-
         private static void Main(string[] args)
         {
-            Common.Logging.LogManager.Adapter = new Common.Logging.Simple.ConsoleOutLoggerFactoryAdapter
-            {
-                Level = Common.Logging.LogLevel.Info
-            };
-
-            NameValueCollection properties = new NameValueCollection
+            var properties = new NameValueCollection
             {
                 // Setting some scheduler properties
                 ["quartz.scheduler.instanceName"] = "QuartzRavenDBDemo",
@@ -26,25 +21,40 @@ namespace Examples
                 ["quartz.threadPool.threadPriority"] = "Normal",
                 // Setting RavenDB as the persisted JobStore
                 ["quartz.jobStore.type"] = "Quartz.Impl.RavenDB.RavenJobStore, Quartz.Impl.RavenDB",
+                // RavenDB Default Database name
+                ["quartz.jobStore.database"] = "QuartzDemo",
+                // One or more URLs to database server
+                ["quartz.jobStore.urls"] = "[\"http://live-test.ravendb.net\"]",
+                // If you use authentication, specify certificate and password
+                //["quartz.jobStore.certPath"] = "My/Cert/path.pfx",
+                //["quartz.jobStore.certPass"] = "SuperSecret",
+                ["quartz.serializer.type"] = "json"
             };
 
             try
             {
-
                 ISchedulerFactory sf = new StdSchedulerFactory(properties);
-                IScheduler scheduler = sf.GetScheduler();
+                var scheduler = sf.GetScheduler().Result;
                 scheduler.Start();
 
-                IJobDetail emptyFridgeJob = JobBuilder.Create<EmptyFridge>()
+                var emptyFridgeJob = JobBuilder.Create<EmptyFridge>()
                     .WithIdentity("EmptyFridgeJob", "Office")
+                    .RequestRecovery()
                     .Build();
 
-                IJobDetail turnOffLightsJob = JobBuilder.Create<TurnOffLights>()
+                var turnOffLightsJob = JobBuilder.Create<TurnOffLights>()
                     .WithIdentity("TurnOffLightsJob", "Office")
+                    .RequestRecovery()
                     .Build();
 
-                IJobDetail checkAliveJob = JobBuilder.Create<CheckAlive>()
+                var checkAliveJob = JobBuilder.Create<CheckAlive>()
                     .WithIdentity("CheckAliveJob", "Office")
+                    .RequestRecovery()
+                    .Build();
+
+                var visitJob = JobBuilder.Create<Visit>()
+                    .WithIdentity("VisitJob", "Office")
+                    .RequestRecovery()
                     .Build();
 
                 // Weekly, Friday at 10 AM (Cron Trigger)
@@ -64,7 +74,7 @@ namespace Examples
                     .Build();
 
                 // Periodic check every 10 seconds (Simple Trigger)
-                ITrigger checkAliveTrigger = TriggerBuilder.Create()
+                var checkAliveTrigger = TriggerBuilder.Create()
                     .WithIdentity("CheckAlive", "Office")
                     .StartAt(DateTime.UtcNow.AddSeconds(3))
                     .WithSimpleSchedule(x => x
@@ -72,10 +82,16 @@ namespace Examples
                         .RepeatForever())
                     .Build();
 
+                var visitTrigger = TriggerBuilder.Create()
+                    .WithIdentity("Visit", "Office")
+                    .StartAt(DateTime.UtcNow.AddSeconds(3))
+                    .Build();
+
 
                 scheduler.ScheduleJob(checkAliveJob, checkAliveTrigger);
                 scheduler.ScheduleJob(emptyFridgeJob, emptyFridgeTrigger);
                 scheduler.ScheduleJob(turnOffLightsJob, turnOffLightsTrigger);
+                scheduler.ScheduleJob(visitJob, visitTrigger);
 
                 // some sleep to show what's happening
                 Thread.Sleep(TimeSpan.FromSeconds(600));
@@ -95,30 +111,40 @@ namespace Examples
     [PersistJobDataAfterExecution]
     public class EmptyFridge : IJob
     {
-        public void Execute(IJobExecutionContext context)
+        Task IJob.Execute(IJobExecutionContext context)
         {
             Console.WriteLine("Emptying the fridge...");
+            return Task.CompletedTask;
         }
-
     }
 
     [PersistJobDataAfterExecution]
     public class TurnOffLights : IJob
     {
-        public void Execute(IJobExecutionContext context)
+        Task IJob.Execute(IJobExecutionContext context)
         {
             Console.WriteLine("Turning lights off...");
+            return Task.CompletedTask;
         }
-
     }
 
     [PersistJobDataAfterExecution]
     public class CheckAlive : IJob
     {
-        public void Execute(IJobExecutionContext context)
+        Task IJob.Execute(IJobExecutionContext context)
         {
             Console.WriteLine("Verifying site is up...");
+            return Task.CompletedTask;
         }
+    }
 
+    [PersistJobDataAfterExecution]
+    public class Visit : IJob
+    {
+        Task IJob.Execute(IJobExecutionContext context)
+        {
+            Console.WriteLine("Visiting the office, once :)");
+            return Task.CompletedTask;
+        }
     }
 }
