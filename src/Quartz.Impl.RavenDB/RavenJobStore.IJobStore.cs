@@ -231,19 +231,22 @@ namespace Quartz.Impl.RavenDB
 
             var scheduler = await session.LoadAsync<Scheduler>(InstanceName, cancellationToken);
 
-            var isJobGroupPaused = scheduler.PausedJobGroups.Contains(newTrigger.JobKey.Group);
-
-            // make sure trigger group is not paused and that job is not blocked
-            if (isTriggerGroupPaused || isJobGroupPaused)
+            if (scheduler != null)
             {
-                trigger.State = InternalTriggerState.Paused;
+                var isJobGroupPaused = scheduler.PausedJobGroups.Contains(newTrigger.JobKey.Group);
 
-                if (scheduler.BlockedJobs.Contains(newTrigger.GetJobDatabaseId()))
-                    trigger.State = InternalTriggerState.PausedAndBlocked;
-            }
-            else if (scheduler.BlockedJobs.Contains(newTrigger.GetJobDatabaseId()))
-            {
-                trigger.State = InternalTriggerState.Blocked;
+                // make sure trigger group is not paused and that job is not blocked
+                if (isTriggerGroupPaused || isJobGroupPaused)
+                {
+                    trigger.State = InternalTriggerState.Paused;
+
+                    if (scheduler.BlockedJobs.Contains(newTrigger.GetJobDatabaseId()))
+                        trigger.State = InternalTriggerState.PausedAndBlocked;
+                }
+                else if (scheduler.BlockedJobs.Contains(newTrigger.GetJobDatabaseId()))
+                {
+                    trigger.State = InternalTriggerState.Blocked;
+                }
             }
 
             // Overwrite if exists
@@ -867,12 +870,13 @@ namespace Quartz.Impl.RavenDB
 
                     if (job.ConcurrentExecutionDisallowed)
                     {
-                        var triggerCollection = session
+                        var triggerCollection = await session
                             .Query<Trigger>()
                             .Include(t => t.Scheduler) // pre-load
                             .Where(t =>
                                 Equals(t.Group, job.Key.Group) &&
-                                Equals(t.JobName, job.Key.Name));
+                                Equals(t.JobName, job.Key.Name))
+                            .ToListAsync(cancellationToken);
 
                         foreach (var t in triggerCollection)
                         {
@@ -921,9 +925,9 @@ namespace Quartz.Impl.RavenDB
                 {
                     scheduler.BlockedJobs.Remove(job.Key);
 
-                    var triggerCollection = session.Query<Trigger>()
+                    var triggerCollection = await session.Query<Trigger>()
                         .Where(t => Equals(t.Group, job.Group) && Equals(t.JobName, job.Name))
-                        .ToList();
+                        .ToListAsync(cancellationToken);
 
                     foreach (var t in triggerCollection)
                     {
