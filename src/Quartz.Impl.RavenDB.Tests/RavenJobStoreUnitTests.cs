@@ -32,6 +32,7 @@ using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Raven.Client.Documents.Operations;
 
 namespace Quartz.Impl.RavenDB.Tests
 {
@@ -42,37 +43,39 @@ namespace Quartz.Impl.RavenDB.Tests
     [TestFixture]
     public class RavenJobStoreUnitTests
     {
-        private IJobStore fJobStore;
+        private RavenJobStore fJobStore;
         private JobDetailImpl fJobDetail;
         private SampleSignaler fSignaler;
 
         [SetUp]
-        public void SetUp()
+        public async Task SetUp()
         {
-            fJobStore = new RavenJobStore();
-            fJobStore.ClearAllSchedulingData();
-            Thread.Sleep(1000);
+            await InitJobStore();
         }
 
-        private void InitJobStore()
+        private async Task InitJobStore()
         {
 
-            fJobStore = new RavenJobStore();
+            fJobStore = new RavenJobStore
+            {
+                Database = "QuartzTest",
+                Urls = "[\"http://localhost:8080\"]"
+            };
 
-            fJobStore.ClearAllSchedulingData();
             fSignaler = new SampleSignaler();
-            fJobStore.Initialize(null, fSignaler);
-            fJobStore.SchedulerStarted();
+            await fJobStore.Initialize(null, fSignaler);
+            var op = await fJobStore.Store.Operations.SendAsync(new DeleteByQueryOperation("from @all_docs"));
+            await op.WaitForCompletionAsync();
+
+            await fJobStore.SchedulerStarted();
 
             fJobDetail = new JobDetailImpl("job1", "jobGroup1", typeof(NoOpJob)) {Durable = true};
-            fJobStore.StoreJob(fJobDetail, true);
+            await fJobStore.StoreJob(fJobDetail, true);
         }
 
         [Test]
         public async Task TestAcquireNextTrigger()
         {
-            InitJobStore();
-
             var d = DateBuilder.EvenMinuteDateAfterNow();
             IOperableTrigger trigger1 = new SimpleTriggerImpl("trigger1", "triggerGroup1", fJobDetail.Name,
                 fJobDetail.Group, d.AddSeconds(200), d.AddSeconds(200), 2, TimeSpan.FromSeconds(2));
@@ -111,8 +114,6 @@ namespace Quartz.Impl.RavenDB.Tests
         [Test]
         public async Task TestAcquireNextTriggerBatch()
         {
-            InitJobStore();
-
             var d = DateBuilder.EvenMinuteDateAfterNow();
 
             IOperableTrigger early = new SimpleTriggerImpl("early", "triggerGroup1", fJobDetail.Name, fJobDetail.Group,
@@ -215,21 +216,19 @@ namespace Quartz.Impl.RavenDB.Tests
         [Test]
         public async Task TestTriggerStates()
         {
-            InitJobStore();
-
             IOperableTrigger trigger = new SimpleTriggerImpl("trigger1", "triggerGroup1", fJobDetail.Name,
                 fJobDetail.Group, DateTimeOffset.Now.AddSeconds(100), DateTimeOffset.Now.AddSeconds(200), 2,
                 TimeSpan.FromSeconds(2));
             trigger.ComputeFirstFireTimeUtc(null);
-            Assert.AreEqual(TriggerState.None, fJobStore.GetTriggerState(trigger.Key));
+            Assert.AreEqual(TriggerState.None, await fJobStore.GetTriggerState(trigger.Key));
             await fJobStore.StoreTrigger(trigger, false);
-            Assert.AreEqual(TriggerState.Normal, fJobStore.GetTriggerState(trigger.Key));
+            Assert.AreEqual(TriggerState.Normal, await fJobStore.GetTriggerState(trigger.Key));
 
             await fJobStore.PauseTrigger(trigger.Key);
-            Assert.AreEqual(TriggerState.Paused, fJobStore.GetTriggerState(trigger.Key));
+            Assert.AreEqual(TriggerState.Paused, await fJobStore.GetTriggerState(trigger.Key));
 
             await fJobStore.ResumeTrigger(trigger.Key);
-            Assert.AreEqual(TriggerState.Normal, fJobStore.GetTriggerState(trigger.Key));
+            Assert.AreEqual(TriggerState.Normal, await fJobStore.GetTriggerState(trigger.Key));
 
             trigger = (await fJobStore.AcquireNextTriggers(trigger.GetNextFireTimeUtc().Value.AddSeconds(10), 1,
                 TimeSpan.FromMilliseconds(1))).ToArray()[0];
@@ -244,10 +243,8 @@ namespace Quartz.Impl.RavenDB.Tests
         }
 
         [Test]
-        public void TestRemoveCalendarWhenTriggersPresent()
+        public async Task TestRemoveCalendarWhenTriggersPresent()
         {
-            InitJobStore();
-
             // QRTZNET-29
 
             IOperableTrigger trigger = new SimpleTriggerImpl("trigger1", "triggerGroup1", fJobDetail.Name,
@@ -255,16 +252,15 @@ namespace Quartz.Impl.RavenDB.Tests
                 TimeSpan.FromSeconds(2));
             trigger.ComputeFirstFireTimeUtc(null);
             ICalendar cal = new MonthlyCalendar();
-            fJobStore.StoreTrigger(trigger, false);
-            fJobStore.StoreCalendar("cal", cal, false, true);
+            await fJobStore.StoreTrigger(trigger, false);
+            await  fJobStore.StoreCalendar("cal", cal, false, true);
 
-            fJobStore.RemoveCalendar("cal");
+            await fJobStore.RemoveCalendar("cal");
         }
 
         [Test]
         public async Task TestStoreTriggerReplacesTrigger()
         {
-            InitJobStore();
 
             var jobName = "StoreJobReplacesJob";
             var jobGroup = "StoreJobReplacesJobGroup";
@@ -278,11 +274,11 @@ namespace Quartz.Impl.RavenDB.Tests
             tr.CalendarName = null;
 
             await fJobStore.StoreTrigger(tr, false);
-            Assert.AreEqual(tr, fJobStore.RetrieveTrigger(new TriggerKey(trName, trGroup)));
+            Assert.AreEqual(tr, await fJobStore.RetrieveTrigger(new TriggerKey(trName, trGroup)));
 
             tr.CalendarName = "NonExistingCalendar";
             await fJobStore.StoreTrigger(tr, true);
-            Assert.AreEqual(tr, fJobStore.RetrieveTrigger(new TriggerKey(trName, trGroup)));
+            Assert.AreEqual(tr, await fJobStore.RetrieveTrigger(new TriggerKey(trName, trGroup)));
             Assert.AreEqual(tr.CalendarName,
                 (await fJobStore.RetrieveTrigger(new TriggerKey(trName, trGroup)))?.CalendarName,
                 "StoreJob doesn't replace triggers");
@@ -301,36 +297,39 @@ namespace Quartz.Impl.RavenDB.Tests
         }
 
         [Test]
-        public void PauseJobGroupPausesNewJob()
+        public async Task PauseJobGroupPausesNewJob()
         {
-            InitJobStore();
 
             var jobName1 = "PauseJobGroupPausesNewJob";
             var jobName2 = "PauseJobGroupPausesNewJob2";
             var jobGroup = "PauseJobGroupPausesNewJobGroup";
             var detail = new JobDetailImpl(jobName1, jobGroup, typeof(NoOpJob));
             detail.Durable = true;
-            fJobStore.StoreJob(detail, false);
-            fJobStore.PauseJobs(GroupMatcher<JobKey>.GroupEquals(jobGroup));
+            await fJobStore.StoreJob(detail, false);
+            await fJobStore.PauseJobs(GroupMatcher<JobKey>.GroupEquals(jobGroup));
 
             detail = new JobDetailImpl(jobName2, jobGroup, typeof(NoOpJob));
             detail.Durable = true;
-            fJobStore.StoreJob(detail, false);
+            await fJobStore.StoreJob(detail, false);
 
             var trName = "PauseJobGroupPausesNewJobTrigger";
             var trGroup = "PauseJobGroupPausesNewJobTriggerGroup";
             IOperableTrigger tr = new SimpleTriggerImpl(trName, trGroup, DateTimeOffset.UtcNow);
             tr.JobKey = new JobKey(jobName2, jobGroup);
-            fJobStore.StoreTrigger(tr, false);
-            Assert.AreEqual(TriggerState.Paused, fJobStore.GetTriggerState(tr.Key));
+            await fJobStore.StoreTrigger(tr, false);
+            Assert.AreEqual(TriggerState.Paused, await fJobStore.GetTriggerState(tr.Key));
         }
 
         [Test]
         public async Task TestRetrieveJob_NoJobFound()
         {
-            InitJobStore();
 
-            var store = new RavenJobStore();
+            var store = new RavenJobStore
+            {
+                Database = "QuartzTest",
+                Urls = "[\"http://localhost:8080\"]"
+            };
+            await store.Initialize(null, fSignaler);
             var job = await store.RetrieveJob(new JobKey("not", "existing"));
             Assert.IsNull(job);
         }
@@ -338,9 +337,14 @@ namespace Quartz.Impl.RavenDB.Tests
         [Test]
         public async Task TestRetrieveTrigger_NoTriggerFound()
         {
-            InitJobStore();
 
-            var store = new RavenJobStore();
+            var store = new RavenJobStore
+            {
+                Database = "QuartzTest",
+                Urls = "[\"http://localhost:8080\"]"
+            };
+            await store.Initialize(null, fSignaler);
+
             var trigger = await store.RetrieveTrigger(new TriggerKey("not", "existing"));
             Assert.IsNull(trigger);
         }
@@ -348,9 +352,13 @@ namespace Quartz.Impl.RavenDB.Tests
         [Test]
         public async Task TestStoreAndRetrieveJobs()
         {
-            InitJobStore();
 
-            var store = new RavenJobStore();
+            var store = new RavenJobStore
+            {
+                Database = "QuartzTest",
+                Urls = "[\"http://localhost:8080\"]"
+            };
+            await store.Initialize(null, fSignaler);
 
             // Store jobs.
             for (var i = 0; i < 10; i++)
@@ -371,9 +379,12 @@ namespace Quartz.Impl.RavenDB.Tests
         [Test]
         public async Task TestStoreAndRetrieveTriggers()
         {
-            InitJobStore();
-
-            var store = new RavenJobStore();
+            var store = new RavenJobStore
+            {
+                Database = "QuartzTest",
+                Urls = "[\"http://localhost:8080\"]"
+            };
+            await store.Initialize(null, fSignaler);
             await store.SchedulerStarted();
 
             // Store jobs and triggers.
@@ -403,13 +414,15 @@ namespace Quartz.Impl.RavenDB.Tests
         [Test]
         public async Task TestAcquireTriggers()
         {
-            InitJobStore();
 
             ISchedulerSignaler schedSignaler = new SampleSignaler();
             ITypeLoadHelper loadHelper = new SimpleTypeLoadHelper();
             loadHelper.Initialize();
 
-            var store = new RavenJobStore();
+            var store = new RavenJobStore  {
+                Database = "QuartzTest",
+                Urls = "[\"http://localhost:8080\"]"
+            };
             await store.Initialize(loadHelper, schedSignaler);
             await store.SchedulerStarted();
 
@@ -449,13 +462,14 @@ namespace Quartz.Impl.RavenDB.Tests
         [Test]
         public async Task TestAcquireTriggersInBatch()
         {
-            InitJobStore();
-
             ISchedulerSignaler schedSignaler = new SampleSignaler();
             ITypeLoadHelper loadHelper = new SimpleTypeLoadHelper();
             loadHelper.Initialize();
 
-            var store = new RavenJobStore();
+            var store = new RavenJobStore  {
+                Database = "QuartzTest",
+                Urls = "[\"http://localhost:8080\"]"
+            };
             await store.Initialize(loadHelper, schedSignaler);
 
             // Setup: Store jobs and triggers.
@@ -490,8 +504,9 @@ namespace Quartz.Impl.RavenDB.Tests
         public async Task TestBasicStorageFunctions()
         {
             var sched = await CreateScheduler("TestBasicStorageFunctions", 2);
-            await sched.Start();
-
+            await sched.Start(CancellationToken.None);
+            await sched.Standby(CancellationToken.None);
+            
             // test basic storage functions of scheduler...
 
             var job = JobBuilder.Create()
@@ -568,8 +583,8 @@ namespace Quartz.Impl.RavenDB.Tests
             IList<string> jobGroups = (await sched.GetJobGroupNames()).ToList();
             IList<string> triggerGroups = (await sched.GetTriggerGroupNames()).ToList();
 
-            Assert.AreEqual(2, jobGroups.Count, "Job group list size expected to be = 2 ");
-            Assert.AreEqual(2, triggerGroups.Count, "Trigger group list size expected to be = 2 ");
+            Assert.AreEqual(3, jobGroups.Count, "Job group list size expected to be = 2 + 1 for DEFAULT");
+            Assert.AreEqual(2, triggerGroups.Count, "Trigger group list size expected to be = 2");
 
             ISet<JobKey> jobKeys = (await sched.GetJobKeys(GroupMatcher<JobKey>.GroupEquals(JobKey.DefaultGroup)))
                 .ToHashSet();
@@ -674,11 +689,16 @@ namespace Quartz.Impl.RavenDB.Tests
                 ["quartz.scheduler.instanceId"] = "AUTO",
                 ["quartz.threadPool.threadCount"] = threadCount.ToString(CultureInfo.InvariantCulture),
                 ["quartz.threadPool.type"] = "Quartz.Simpl.SimpleThreadPool, Quartz",
+                ["quartz.serializer.type"] = "binary",
                 // Setting RavenDB as the persisted JobStore
-                ["quartz.jobStore.type"] = "Quartz.Impl.RavenDB.RavenJobStore, Quartz.Impl.RavenDB"
+                ["quartz.jobStore.type"] = "Quartz.Impl.RavenDB.RavenJobStore, Quartz.Impl.RavenDB",
+                ["quartz.jobStore.urls"] = "[\"http://localhost:8080\"]",
+                ["quartz.jobStore.database"] = "QuartzTest",
+                
             };
 
-            return await new StdSchedulerFactory(properties).GetScheduler();
+            var stdSchedulerFactory = new StdSchedulerFactory(properties);
+            return await stdSchedulerFactory.GetScheduler();
         }
 
         private const string Barrier = "BARRIER";
@@ -747,7 +767,6 @@ namespace Quartz.Impl.RavenDB.Tests
             sched.Context.Put(DateStamps, jobExecTimestamps);
             await sched.Start();
 
-            Thread.Yield();
 
             var job1 = JobBuilder.Create<TestJobWithSync>()
                 .WithIdentity("job1")
@@ -880,7 +899,7 @@ namespace Quartz.Impl.RavenDB.Tests
                 .StoreDurably()
                 .Build();
 
-            Assert.That(sched.CheckExists(new JobKey("j1")), Is.False, "Unexpected existence of job named 'j1'.");
+            Assert.That(await sched.CheckExists(new JobKey("j1")), Is.False, "Unexpected existence of job named 'j1'.");
 
             await sched.AddJob(job, false);
 
@@ -897,7 +916,7 @@ namespace Quartz.Impl.RavenDB.Tests
             }
             catch (SchedulerException)
             {
-                Assert.That(sched.CheckExists(new JobKey("j2")), Is.False, "Unexpected existence of job named 'j2'.");
+                Assert.That(await sched.CheckExists(new JobKey("j2")), Is.False, "Unexpected existence of job named 'j2'.");
             }
 
             await sched.AddJob(nonDurableJob, false, true);
@@ -933,7 +952,6 @@ namespace Quartz.Impl.RavenDB.Tests
         [Test]
         public async Task TestShutdownWithWaitIsClean()
         {
-            var shutdown = false;
             var jobExecTimestamps = new List<DateTime>();
             var barrier = new Barrier(2);
             var scheduler = await CreateScheduler("testShutdownWithoutWaitIsUnclean", 8);
@@ -950,25 +968,10 @@ namespace Quartz.Impl.RavenDB.Tests
             }
             finally
             {
-                void ThreadStart()
-                {
-                    try
-                    {
-                        scheduler.Shutdown(true);
-                        shutdown = true;
-                    }
-                    catch (SchedulerException ex)
-                    {
-                        throw new Exception("exception: " + ex.Message, ex);
-                    }
-                }
-
-                var t = new Thread((ThreadStart) ThreadStart);
-                t.Start();
-                Thread.Sleep(1000);
-                Assert.That(shutdown, Is.False);
+                var task = Task.Run(() => scheduler.Shutdown(true));
+                Assert.False(await Task.WhenAny(task, Task.Delay(500)) == task);
                 barrier.SignalAndWait(testTimeout);
-                t.Join();
+                Assert.True(await Task.WhenAny(task, Task.Delay(5000)) == task);
             }
         }
 

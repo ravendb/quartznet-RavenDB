@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Specialized;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using NUnit.Framework;
@@ -25,7 +26,13 @@ namespace Quartz.Impl.RavenDB.Tests
             scheduler.ListenerManager.AddJobListener(_listener);
             await scheduler.Start();
             await scheduler.ScheduleJob(_job, _trigger);
-            while (!await scheduler.CheckExists(_job.Key)) ;
+            var sp = Stopwatch.StartNew();
+            while (!await scheduler.CheckExists(_job.Key) || _listener.WasExecuted == false)
+            {
+                if (sp.ElapsedMilliseconds > 5000)
+                    break;
+                await Task.Delay(100);
+            }
             await scheduler.Shutdown(true);
         }
 
@@ -47,8 +54,11 @@ namespace Quartz.Impl.RavenDB.Tests
                 // Normal scheduler properties
                 ["quartz.scheduler.instanceName"] = "TestScheduler",
                 ["quartz.scheduler.instanceId"] = "instance_one",
+                ["quartz.serializer.type"] = "binary",
                 // RavenDB JobStore property
-                ["quartz.jobStore.type"] = "Quartz.Impl.RavenDB.RavenJobStore, Quartz.Impl.RavenDB"
+                ["quartz.jobStore.type"] = "Quartz.Impl.RavenDB.RavenJobStore, Quartz.Impl.RavenDB",
+                ["quartz.jobStore.urls"] = "[\"http://localhost:8080\"]",
+                ["quartz.jobStore.database"] = "QuartzTest",
             };
 
             ISchedulerFactory sf = new StdSchedulerFactory(properties);
