@@ -496,10 +496,11 @@ namespace Quartz.Impl.RavenDB
         {
             using var session = Store.OpenAsyncSession();
 
-            return await session.Query<Job>()
-                .Select(j => j.Group)
-                .Distinct()
-                .ToListAsync(cancellationToken);
+            return (await session.Query<Job>()
+                .GroupBy(j => j.Group)
+                .Select(x=>new {G = x.Key})
+                .ToListAsync(cancellationToken))
+                .Select(x=>x.G).ToList();
         }
 
         public async Task<IReadOnlyCollection<string>> GetTriggerGroupNames(
@@ -507,10 +508,11 @@ namespace Quartz.Impl.RavenDB
         {
             using var session = Store.OpenAsyncSession();
 
-            return await session.Query<Trigger>()
-                .Select(t => t.Group)
-                .Distinct()
-                .ToListAsync(cancellationToken) ?? new List<string>();
+            return (await session.Query<Trigger>()
+                    .GroupBy(j => j.Group)
+                    .Select(x=>new {G = x.Key})
+                    .ToListAsync(cancellationToken))
+                .Select(x=>x.G).ToList();
         }
 
         public async Task<IReadOnlyCollection<string>> GetCalendarNames(CancellationToken cancellationToken = default)
@@ -745,7 +747,6 @@ namespace Quartz.Impl.RavenDB
         {
             var result = new List<IOperableTrigger>();
             var acquiredJobKeysForNoConcurrentExec = new HashSet<JobKey>();
-            DateTimeOffset? firstAcquiredTriggerFireTime = null;
 
             using var session = Store.OpenAsyncSession();
 
@@ -795,7 +796,6 @@ namespace Quartz.Impl.RavenDB
 
                 result.Add(candidateTrigger.Deserialize());
 
-                firstAcquiredTriggerFireTime ??= candidateTrigger.NextFireTimeUtc;
 
                 if (result.Count == maxCount) break;
             }

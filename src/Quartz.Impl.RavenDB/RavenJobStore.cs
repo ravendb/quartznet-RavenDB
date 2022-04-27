@@ -75,7 +75,7 @@ namespace Quartz.Impl.RavenDB
         /// <summary>
         ///     Gets the current configured <see cref="DocumentStore" />.
         /// </summary>
-        private IDocumentStore Store { get; set; }
+        public IDocumentStore Store { get; set; }
 
         [UsedImplicitly]
         protected virtual DateTimeOffset MisfireTime
