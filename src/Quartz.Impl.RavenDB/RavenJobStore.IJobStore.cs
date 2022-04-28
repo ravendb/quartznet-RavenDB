@@ -254,6 +254,13 @@ namespace Quartz.Impl.RavenDB
             await session.SaveChangesAsync(cancellationToken);
         }
 
+        private async Task RemoveTriggerOnly(TriggerKey triggerKey, CancellationToken cancellationToken = default)
+        {
+            using var session = Store.OpenAsyncSession();
+            session.Delete(triggerKey.GetDatabaseId());
+            await session.SaveChangesAsync(cancellationToken);
+        }
+
         public async Task<bool> RemoveTrigger(TriggerKey triggerKey, CancellationToken cancellationToken = default)
         {
             using var session = Store.OpenAsyncSession();
@@ -309,13 +316,14 @@ namespace Quartz.Impl.RavenDB
         public async Task<bool> ReplaceTrigger(TriggerKey triggerKey, IOperableTrigger newTrigger,
             CancellationToken cancellationToken = default)
         {
-            if (!await CheckExists(triggerKey, cancellationToken).ConfigureAwait(false)) return false;
+            if (!await CheckExists(triggerKey, cancellationToken).ConfigureAwait(false)) 
+                return false;
 
-            var wasRemoved = await RemoveTrigger(triggerKey, cancellationToken).ConfigureAwait(false);
+            await RemoveTriggerOnly(triggerKey, cancellationToken).ConfigureAwait(false);
 
-            if (wasRemoved) await StoreTrigger(newTrigger, true, cancellationToken).ConfigureAwait(false);
+            await StoreTrigger(newTrigger, true, cancellationToken).ConfigureAwait(false);
 
-            return wasRemoved;
+            return true;
         }
 
         public async Task<IOperableTrigger> RetrieveTrigger(TriggerKey triggerKey,
