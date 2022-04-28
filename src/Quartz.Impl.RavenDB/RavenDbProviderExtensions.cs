@@ -14,5 +14,12 @@ namespace Quartz.Impl.RavenDB
                 typeof(RavenJobStore).AssemblyQualifiedNameWithoutVersion());
             config?.Invoke(new RavenDbProviderOptions(options));
         }
+
+        [UsedImplicitly]
+        public static void UseRavenDbWithInjectedDocumentStore(this SchedulerBuilder.PersistentStoreOptions options)
+        {
+            options.SetProperty(StdSchedulerFactory.PropertyJobStoreType,
+                typeof(RavenJobStoreWithInjectDocumentStore).AssemblyQualifiedNameWithoutVersion());
+        }
     }
 }

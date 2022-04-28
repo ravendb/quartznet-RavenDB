@@ -24,21 +24,26 @@ namespace Quartz.Impl.RavenDB
         {
             _signaler = signaler;
 
-            Store = new DocumentStore
+            Store = InitializeDocumentStore();
+            return Task.CompletedTask;
+        }
+
+        protected virtual IDocumentStore InitializeDocumentStore()
+        {
+            var s = new DocumentStore
             {
                 Urls = _urls,
                 Database = Database,
                 Certificate = string.IsNullOrEmpty(CertPath) ? null : new X509Certificate2(CertPath, CertPass)
             };
-            
-            Store.Initialize();
 
-            Store.OnBeforeQuery += (sender, beforeQueryExecutedArgs) =>
+            s.OnBeforeQuery += (sender, beforeQueryExecutedArgs) =>
             {
                 beforeQueryExecutedArgs.QueryCustomization.WaitForNonStaleResults();
             };
+            s.Initialize();
 
-            return Task.CompletedTask;
+            return s;
         }
 
         public async Task SchedulerStarted(CancellationToken cancellationToken = default)
