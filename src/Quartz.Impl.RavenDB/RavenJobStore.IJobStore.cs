@@ -19,12 +19,22 @@ namespace Quartz.Impl.RavenDB
 {
     public partial class RavenJobStore
     {
+        public RavenJobStore()
+        {
+
+        }
+
+        public RavenJobStore(IDocumentStore store)
+        {
+            Store = store;
+        }
+
         public Task Initialize(ITypeLoadHelper loadHelper, ISchedulerSignaler signaler,
             CancellationToken cancellationToken = default)
         {
             _signaler = signaler;
 
-            Store = InitializeDocumentStore();
+            Store = Store ?? InitializeDocumentStore();
             return Task.CompletedTask;
         }
 
